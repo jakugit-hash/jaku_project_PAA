@@ -19,19 +19,34 @@ AMyGameMode::AMyGameMode()
     CoinWidgetInstance = nullptr;
     */
    
-    static ConstructorHelpers::FClassFinder<UUserWidget> WidgetBP(TEXT("/Game/widgets/WBP_CoinWidget.WBP_CoinWidget_C"));
+    /*static ConstructorHelpers::FClassFinder<UUserWidget> WidgetBP(TEXT("/Game/widgets/WBP_CoinWidget.WBP_CoinWidget_C"));
     if (WidgetBP.Succeeded())
     {
         CoinWidgetClass = WidgetBP.Class;
         UE_LOG(LogTemp, Warning, TEXT("✅ Blueprint found!"));
-    }
+    }*/
 }
 
 void AMyGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Log to verify BeginPlay is called
+    // Find or spawn the GridManager
+    GridManager = Cast<AGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AGridManager::StaticClass()));
+    if (!GridManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GridManager not found in the level! Spawning a new one..."));
+        FActorSpawnParameters SpawnParams;
+        GridManager = GetWorld()->SpawnActor<AGridManager>(AGridManager::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+    }
+
+    if (!GridManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn GridManager!"));
+        return;
+    }
+    
+    /*// Log to verify BeginPlay is called
     UE_LOG(LogTemp, Warning, TEXT("Game Mode BeginPlay called!"));
 
     // Spawn the CoinTossManager
@@ -73,7 +88,7 @@ void AMyGameMode::BeginPlay()
     else
     {
         UE_LOG(LogTemp, Error, TEXT("CoinWidgetClass non è stato settato!"));
-    }
+    }*/
 }
 
 void AMyGameMode::InitializeGame()
@@ -160,7 +175,7 @@ void AMyGameMode::InitializeGame()
     }
 }
 
-void AMyGameMode::StartPlayerTurn()
+/*void AMyGameMode::StartPlayerTurn()
 {
     UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
     bIsPlayerTurn = true;
@@ -182,11 +197,16 @@ void AMyGameMode::EndTurn()
     {
         StartPlayerTurn(); // Switch to player's turn
     }
-}
+}*/
 
 void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 {
-    // Log to verify the coin toss result
+    // Set who starts the placement phase
+    bIsPlayerTurn = bIsPlayerTurnResult;
+
+    // Start the placement phase
+    StartPlacementPhase();
+    /*// Log to verify the coin toss result
     UE_LOG(LogTemp, Warning, TEXT("Coin toss result: %s"), bIsPlayerTurnResult ? TEXT("Player starts") : TEXT("AI starts"));
 
     bIsPlayerTurn = bIsPlayerTurnResult;
@@ -209,8 +229,130 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
     else
     {
         StartAITurn();
-    }
+    }*/
 
     
 
+}
+
+void AMyGameMode::StartPlacementPhase()
+{
+    // Initialize units to place
+    PlayerUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
+    AIUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
+
+    // Create and display the PlacementWidget
+    if (PlacementWidgetClass)
+    {
+        PlacementWidget = CreateWidget<UPlacementWidget>(GetWorld(), PlacementWidgetClass);
+        if (PlacementWidget)
+        {
+            PlacementWidget->SetGameMode(this);
+            PlacementWidget->AddToViewport();
+        }
+    }
+
+    // Start with the winner of the coin toss
+    if (bIsPlayerTurn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player starts placing units."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AI starts placing units."));
+        HandleAIPlacement();
+    }
+}
+
+void AMyGameMode::SetSelectedUnitType(const FString& UnitType)
+{
+    SelectedUnitType = UnitType;
+}
+
+void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
+{
+    if (IsCellValidForPlacement(CellPosition))
+    {
+        // Place the selected unit
+        PlaceUnit(SelectedUnitType, CellPosition);
+
+        // Remove the placed unit from the list
+        if (bIsPlayerTurn)
+        {
+            PlayerUnitsToPlace.Remove(SelectedUnitType);
+        }
+        else
+        {
+            AIUnitsToPlace.Remove(SelectedUnitType);
+        }
+
+        // Check if all units have been placed
+        if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("All units placed. Starting the game."));
+            StartPlayerTurn();
+        }
+        else
+        {
+            // Switch turns
+            bIsPlayerTurn = !bIsPlayerTurn;
+
+            if (bIsPlayerTurn)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Player's turn to place a unit."));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("AI's turn to place a unit."));
+                HandleAIPlacement();
+            }
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid cell for placement."));
+    }
+}
+
+void AMyGameMode::HandleAIPlacement()
+{
+    // AI selects a random unit to place
+    if (AIUnitsToPlace.Num() > 0)
+    {
+        SelectedUnitType = AIUnitsToPlace[FMath::RandRange(0, AIUnitsToPlace.Num() - 1)];
+
+        // Find a random valid cell for placement
+        int32 X, Y;
+        if (GridManager->FindRandomEmptyCell(X, Y))
+        {
+            HandleUnitPlacement(FVector2D(X, Y));
+        }
+    }
+}
+
+void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
+{
+    FVector WorldPosition = GridManager->GetCellWorldPosition(CellPosition.X, CellPosition.Y);
+    AUnit* NewUnit = nullptr;
+
+    if (UnitType == TEXT("Sniper"))
+    {
+        NewUnit = GetWorld()->SpawnActor<ASniper>(ASniper::StaticClass(), WorldPosition, FRotator::ZeroRotator);
+    }
+    else if (UnitType == TEXT("Brawler"))
+    {
+        NewUnit = GetWorld()->SpawnActor<ABrawler>(ABrawler::StaticClass(), WorldPosition, FRotator::ZeroRotator);
+    }
+
+    if (NewUnit)
+    {
+        NewUnit->SetGridPosition(CellPosition);
+        UE_LOG(LogTemp, Warning, TEXT("%s placed at (%d, %d)"), *UnitType, CellPosition.X, CellPosition.Y);
+    }
+}
+
+bool AMyGameMode::IsCellValidForPlacement(FVector2D CellPosition)
+{
+    AGridCell* Cell = GridManager->GetCellAtPosition(CellPosition);
+    return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
