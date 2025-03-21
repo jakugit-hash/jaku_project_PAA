@@ -63,19 +63,11 @@ private:
 	UPROPERTY()
 	class AGridManager* GridManager;
 
-	UPROPERTY()
-	UPlacementWidget* PlacementWidget;
-
-	// Function to place a unit on the grid
-	void PlaceUnit(FString UnitType, FVector2D CellPosition);
-
-	// Function to check if a cell is valid for placement
-	bool IsCellValidForPlacement(FVector2D CellPosition);
 	
 	// Turn tracking
 	bool bIsPlayerTurn;
 
-	/*// Coin Toss Manager
+	// Coin Toss Manager
 	UPROPERTY()
 	ACoinTossManager* CoinTossManager;
 	
@@ -87,6 +79,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> CoinWidgetClass; // La classe del widget (Blueprint)
 	
-	UUserWidget* CoinWidgetInstance; // L'istanza effettiva*/
+	UUserWidget* CoinWidgetInstance; // L'istanza effettiva
 
 };
