@@ -5,6 +5,9 @@
 #include "GameFramework/Actor.h"
 #include "CoinTossManager.generated.h"
 
+// Declare a delegate for the coin toss result
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCoinTossComplete, bool, bIsPlayerTurnResult);
+
 UCLASS()
 class PROJECT_PAA_API ACoinTossManager : public AActor
 {

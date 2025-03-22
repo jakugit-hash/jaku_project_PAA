@@ -12,13 +12,20 @@ AGridManager::AGridManager() : ObstacleCount(0)
 void AGridManager::BeginPlay()
 {
     Super::BeginPlay();
-    UE_LOG(LogTemp, Warning, TEXT("AGridManager is running!"));
-    // Removed CreateGrid() and GenerateObstacles() from here
+
+    UE_LOG(LogTemp, Warning, TEXT("AGridManager::BeginPlay called!"));
+
+    // Create the grid
+    CreateGrid();
+
+    // Generate obstacles
+    GenerateObstacles();
 }
 
 // Function to create the grid
 void AGridManager::CreateGrid()
 {
+    
     UE_LOG(LogTemp, Warning, TEXT("Creating Grid..."));
 
     GridArray.SetNum(GridSizeX);
@@ -279,4 +286,21 @@ bool AGridManager::FindRandomEmptyCell(int32& OutX, int32& OutY)
     OutY = EmptyCells[RandomIndex].Y;
 
     return true;
+}
+
+void AGridManager::BeginDestroy()
+{
+    Super::BeginDestroy();
+
+    // Clean up grid cells
+    for (AGridCell* Cell : GridCells)
+    {
+        if (Cell)
+        {
+            Cell->Destroy();
+        }
+    }
+    GridCells.Empty();
+
+    UE_LOG(LogTemp, Warning, TEXT("GridManager cleaned up!"));
 }

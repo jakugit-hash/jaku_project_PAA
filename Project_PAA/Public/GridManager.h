@@ -29,6 +29,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void BeginDestroy() override;
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
@@ -44,6 +45,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
     TSubclassOf<AGridCell> GridCellBlueprint;
 
+    // Array to store grid cells
+    UPROPERTY()
+    TArray<AGridCell*> GridCells;
     
     TArray<TArray<AGridCell*>> GridArray;
 

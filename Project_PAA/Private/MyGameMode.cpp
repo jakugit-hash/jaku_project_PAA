@@ -3,6 +3,8 @@
 #include "PlacementWidget.h"
 #include "Sniper.h"
 #include "Brawler.h"
+#include "CoinWidget.h"
+#include "CoinTossManager.h"
 #include "Kismet/GameplayStatics.h"
 
 AMyGameMode::AMyGameMode()
@@ -13,9 +15,10 @@ AMyGameMode::AMyGameMode()
     // Initialize pointers to nullptr
     GridManager = nullptr;
     PlacementWidget = nullptr;
-
+    CoinTossManager = nullptr;
+    
     // Assign the PlacementWidgetClass in the constructor
-    static ConstructorHelpers::FClassFinder<UUserWidget> PlacementWidgetBP(TEXT("/Game/widgets/WBP_PlacementWidget.WBP_PlacementWidget'"));
+    static ConstructorHelpers::FClassFinder<UUserWidget> PlacementWidgetBP(TEXT("/Game/widgets/WBP_PlacementWidget"));
     if (PlacementWidgetBP.Succeeded())
     {
         PlacementWidgetClass = PlacementWidgetBP.Class;
@@ -25,31 +28,75 @@ AMyGameMode::AMyGameMode()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to find PlacementWidgetClass!"));
     }
+    // Assign the CoinWidgetClass in the constructor
+    static ConstructorHelpers::FClassFinder<UUserWidget> CoinWidgetBP(TEXT("/Game/Widgets/WBP_CoinWidget"));
+    if (CoinWidgetBP.Succeeded())
+    {
+        CoinWidgetClass = CoinWidgetBP.Class;
+        UE_LOG(LogTemp, Warning, TEXT("CoinWidgetClass assigned successfully!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to find CoinWidgetClass!"));
+    }
 }
+
 
 void AMyGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Find or spawn the GridManager
-    GridManager = Cast<AGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AGridManager::StaticClass()));
-    if (!GridManager)
+    // Spawn the CoinTossManager
+    CoinTossManager = GetWorld()->SpawnActor<ACoinTossManager>();
+    if (!CoinTossManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("GridManager not found in the level! Spawning a new one..."));
-        FActorSpawnParameters SpawnParams;
-        GridManager = GetWorld()->SpawnActor<AGridManager>(AGridManager::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn CoinTossManager!"));
+        return;
     }
 
-    if (!GridManager)
+    // Create and display the CoinWidget
+    if (CoinWidgetClass)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn GridManager!"));
-        return;
+        UCoinWidget* LocalCoinWidget = CreateWidget<UCoinWidget>(GetWorld(), CoinWidgetClass);
+        if (LocalCoinWidget)
+        {
+            CoinWidget = LocalCoinWidget;
+            CoinWidget->SetCoinTossManager(CoinTossManager);
+            CoinWidget->AddToViewport();
+
+            // Bind the coin toss result handler
+            CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
+
+            // Set input mode to UI only
+            APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+            if (PlayerController)
+            {
+                PlayerController->SetInputMode(FInputModeUIOnly());
+                PlayerController->bShowMouseCursor = true;
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to create CoinWidget!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("CoinWidgetClass is null!"));
     }
 }
 
 void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 {
+    UE_LOG(LogTemp, Warning, TEXT("AMyGameMode::HandleCoinTossResult called! Result: %s"), bIsPlayerTurnResult ? TEXT("Player") : TEXT("AI"));
     // Set who starts the placement phase
+
+    // Remove the CoinWidget from the viewport
+    if (CoinWidget)
+    {
+        CoinWidget->RemoveFromParent();
+        UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed from viewport!"));
+    }
     bIsPlayerTurn = bIsPlayerTurnResult;
 
     // Start the placement phase
@@ -58,6 +105,7 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 
 void AMyGameMode::StartPlacementPhase()
 {
+    UE_LOG(LogTemp, Warning, TEXT("AMyGameMode::StartPlacementPhase called!"));
     // Initialize units to place
     PlayerUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
     AIUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
@@ -65,13 +113,32 @@ void AMyGameMode::StartPlacementPhase()
     // Create and display the PlacementWidget
     if (PlacementWidgetClass)
     {
+        UE_LOG(LogTemp, Warning, TEXT("Creating PlacementWidget..."));
         PlacementWidget = CreateWidget<UPlacementWidget>(GetWorld(), PlacementWidgetClass);
         if (PlacementWidget)
         {
+            UE_LOG(LogTemp, Warning, TEXT("PlacementWidget created successfully!"));
             PlacementWidget->SetGameMode(this);
             PlacementWidget->AddToViewport();
+
+            // Set input mode to UI only
+            APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+            if (PlayerController)
+            {
+                PlayerController->SetInputMode(FInputModeUIOnly());
+                PlayerController->bShowMouseCursor = true;
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to create PlacementWidget!"));
         }
     }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("PlacementWidgetClass is null!"));
+    }
+    
 
     // Start with the winner of the coin toss
     if (bIsPlayerTurn)
@@ -168,7 +235,7 @@ void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
     if (NewUnit)
     {
         NewUnit->SetGridPosition(CellPosition);
-        UE_LOG(LogTemp, Warning, TEXT("%s placed at (%d, %d)"), *UnitType, CellPosition.X, CellPosition.Y);
+        UE_LOG(LogTemp, Warning, TEXT("%s placed at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
     }
 }
 
@@ -182,4 +249,32 @@ void AMyGameMode::StartPlayerTurn()
 {
     UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
     // Implement player turn logic here
+}
+
+void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    Super::EndPlay(EndPlayReason);
+
+    // Remove and destroy widgets
+    if (CoinWidget)
+    {
+        CoinWidget->RemoveFromParent();
+        CoinWidget = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed and destroyed!"));
+    }
+
+    if (PlacementWidget)
+    {
+        PlacementWidget->RemoveFromParent();
+        PlacementWidget = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("PlacementWidget removed and destroyed!"));
+    }
+
+    // Destroy GridManager if it exists
+    if (GridManager)
+    {
+        GridManager->Destroy();
+        GridManager = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("GridManager destroyed!"));
+    }
 }

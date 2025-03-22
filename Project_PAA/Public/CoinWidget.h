@@ -24,7 +24,8 @@ public:
 protected:
 	// Called when the widget is constructed
 	virtual void NativeConstruct() override;
-
+	virtual void NativeDestruct() override;
+	
 	// Function to handle the CoinButton click
 	UFUNCTION()
 	void OnCoinButtonClicked();

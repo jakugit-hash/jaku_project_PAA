@@ -45,4 +45,13 @@ void UCoinWidget::OnCoinButtonClicked()
 		UE_LOG(LogTemp, Error, TEXT("CoinTossManager is null!"));
 	}
 }
-	
+void UCoinWidget::NativeDestruct()
+{
+	Super::NativeDestruct();
+
+	// Clear button click bindings
+	if (CoinButton)
+	{
+		CoinButton->OnClicked.RemoveAll(this);
+	}
+}

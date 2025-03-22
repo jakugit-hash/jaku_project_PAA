@@ -6,6 +6,7 @@
 
 // Forward declarations
 class AMyGameMode;
+class UButton;
 
 UCLASS()
 class PROJECT_PAA_API UPlacementWidget : public UUserWidget
@@ -19,7 +20,9 @@ public:
 protected:
 	// Called when the widget is constructed
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
+	
 	// Functions to handle button clicks
 	UFUNCTION()
 	void OnSniperButtonClicked();
@@ -34,8 +37,8 @@ private:
 
 	// Bind the buttons
 	UPROPERTY(meta = (BindWidget))
-	class UButton* SniperButton;
+	UButton* SniperButton;
 
 	UPROPERTY(meta = (BindWidget))
-	class UButton* BrawlerButton;
+	UButton* BrawlerButton;
 };
