@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,8 +5,8 @@
 #include "MyGameMode.generated.h"
 
 // Forward declarations
-class ACoinTossManager;
-class UCoinWidget;
+class AGridManager;
+class UPlacementWidget;
 
 UCLASS()
 class PROJECT_PAA_API AMyGameMode : public AGameModeBase
@@ -21,9 +20,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	// Function to spawn the grid and units
-	void InitializeGame();
-
 	// Function to start the placement phase
 	void StartPlacementPhase();
 
@@ -36,21 +32,14 @@ public:
 	// Function to set the selected unit type
 	void SetSelectedUnitType(const FString& UnitType);
 
-
-
-	/*// Turn management
-	void StartPlayerTurn();
-	void StartAITurn();
-	void EndTurn();
-	*/
-
 	// Handle coin toss result
 	UFUNCTION()
 	void HandleCoinTossResult(bool bIsPlayerTurnResult);
 
+	// Function to start the player's turn
+	void StartPlayerTurn();
+
 private:
-
-
 	// Track which units need to be placed
 	TArray<FString> PlayerUnitsToPlace;
 	TArray<FString> AIUnitsToPlace;
@@ -58,27 +47,24 @@ private:
 	// Currently selected unit type for placement
 	FString SelectedUnitType;
 
-	
 	// Reference to the GridManager
 	UPROPERTY()
-	class AGridManager* GridManager;
+	AGridManager* GridManager;
 
-	
-	// Turn tracking
+	// Reference to the PlacementWidget
+	UPROPERTY()
+	UPlacementWidget* PlacementWidget;
+
+	// Widget class to use for the placement UI
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UPlacementWidget> PlacementWidgetClass;
+
+	// Track whose turn it is to place units
 	bool bIsPlayerTurn;
 
-	// Coin Toss Manager
-	UPROPERTY()
-	ACoinTossManager* CoinTossManager;
-	
-	// Coin Toss Widget
-	UPROPERTY()
-	TSubclassOf<UUserWidget> CoinWidget;
+	// Function to place a unit on the grid
+	void PlaceUnit(FString UnitType, FVector2D CellPosition);
 
-	// Widget class to use for the coin toss UI
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UUserWidget> CoinWidgetClass; // La classe del widget (Blueprint)
-	
-	UUserWidget* CoinWidgetInstance; // L'istanza effettiva
-
+	// Function to check if a cell is valid for placement
+	bool IsCellValidForPlacement(FVector2D CellPosition);
 };
