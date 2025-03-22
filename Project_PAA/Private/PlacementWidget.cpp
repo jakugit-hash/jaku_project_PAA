@@ -21,6 +21,7 @@ void UPlacementWidget::NativeConstruct()
 	{
 		BrawlerButton->OnClicked.AddDynamic(this, &UPlacementWidget::OnBrawlerButtonClicked);
 	}
+	
 }
 
 void UPlacementWidget::OnSniperButtonClicked()

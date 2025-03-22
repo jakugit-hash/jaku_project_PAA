@@ -56,23 +56,6 @@ void AMyGameMode::BeginPlay()
 
     // Bind the coin toss result handler
     CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
-    // Spawn the GridManager if it doesn't already exist
-    if (!GridManager)
-    {
-        GridManager = GetWorld()->SpawnActor<AGridManager>();
-        if (!GridManager)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn GridManager!"));
-            return;
-        }
-        UE_LOG(LogTemp, Warning, TEXT("GridManager spawned successfully!"));
-    }
-
-    // Ensure the grid is created
-    if (GridManager)
-    {
-        GridManager->CreateGrid();
-    }
 
     // Spawn the CoinTossManager
     CoinTossManager = GetWorld()->SpawnActor<ACoinTossManager>();
