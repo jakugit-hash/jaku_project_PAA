@@ -54,18 +54,45 @@ void AMyGameMode::BeginPlay()
         return;
     }
 
+    // Bind the coin toss result handler
+    CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
+    // Spawn the GridManager if it doesn't already exist
+    if (!GridManager)
+    {
+        GridManager = GetWorld()->SpawnActor<AGridManager>();
+        if (!GridManager)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn GridManager!"));
+            return;
+        }
+        UE_LOG(LogTemp, Warning, TEXT("GridManager spawned successfully!"));
+    }
+
+    // Ensure the grid is created
+    if (GridManager)
+    {
+        GridManager->CreateGrid();
+    }
+
+    // Spawn the CoinTossManager
+    CoinTossManager = GetWorld()->SpawnActor<ACoinTossManager>();
+    if (!CoinTossManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn CoinTossManager!"));
+        return;
+    }
+
+    // Bind the coin toss result handler
+    CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
+
     // Create and display the CoinWidget
     if (CoinWidgetClass)
     {
-        UCoinWidget* LocalCoinWidget = CreateWidget<UCoinWidget>(GetWorld(), CoinWidgetClass);
-        if (LocalCoinWidget)
+        CoinWidget = CreateWidget<UCoinWidget>(GetWorld(), CoinWidgetClass);
+        if (CoinWidget)
         {
-            CoinWidget = LocalCoinWidget;
             CoinWidget->SetCoinTossManager(CoinTossManager);
             CoinWidget->AddToViewport();
-
-            // Bind the coin toss result handler
-            CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
 
             // Set input mode to UI only
             APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
@@ -95,6 +122,7 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
     if (CoinWidget)
     {
         CoinWidget->RemoveFromParent();
+        CoinWidget = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed from viewport!"));
     }
     bIsPlayerTurn = bIsPlayerTurnResult;
@@ -255,21 +283,6 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     Super::EndPlay(EndPlayReason);
 
-    // Remove and destroy widgets
-    if (CoinWidget)
-    {
-        CoinWidget->RemoveFromParent();
-        CoinWidget = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed and destroyed!"));
-    }
-
-    if (PlacementWidget)
-    {
-        PlacementWidget->RemoveFromParent();
-        PlacementWidget = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("PlacementWidget removed and destroyed!"));
-    }
-
     // Destroy GridManager if it exists
     if (GridManager)
     {
@@ -277,4 +290,47 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
         GridManager = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("GridManager destroyed!"));
     }
+    // Remove and destroy widgets
+    if (CoinWidget)
+    {
+        CoinWidget->RemoveFromParent();
+        CoinWidget->ConditionalBeginDestroy(); // Ensure the widget is destroyed
+        CoinWidget = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed and destroyed!"));
+    }
+
+    if (PlacementWidget)
+    {
+        PlacementWidget->RemoveFromParent();
+        PlacementWidget->ConditionalBeginDestroy(); // Ensure the widget is destroyed
+        PlacementWidget = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("PlacementWidget removed and destroyed!"));
+    }
+
+   
+
+    // Destroy CoinTossManager if it exists
+    if (CoinTossManager)
+    {
+        CoinTossManager->Destroy();
+        CoinTossManager = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("CoinTossManager destroyed!"));
+    }
+
+    // Destroy any dynamically spawned units
+    TArray<AActor*> Units;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AUnit::StaticClass(), Units);
+    for (AActor* Unit : Units)
+    {
+        Unit->Destroy();
+    }
+    UE_LOG(LogTemp, Warning, TEXT("All units destroyed!"));
+
+    // Reset state variables
+    PlayerUnitsToPlace.Empty();
+    AIUnitsToPlace.Empty();
+    SelectedUnitType = TEXT("");
+    bIsPlayerTurn = false;
+
+    UE_LOG(LogTemp, Warning, TEXT("GameMode state reset!"));
 }

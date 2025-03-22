@@ -54,4 +54,9 @@ void UCoinWidget::NativeDestruct()
 	{
 		CoinButton->OnClicked.RemoveAll(this);
 	}
+	// Clear any other bound delegates
+	if (CoinTossManager)
+	{
+		CoinTossManager->OnCoinTossComplete.RemoveAll(this);
+	}
 }

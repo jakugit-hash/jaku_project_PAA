@@ -257,33 +257,39 @@ bool AGridManager::IsCellFree(FVector2D CellPosition) const
     return !Cell->IsObstacle() && !Cell->IsOccupied(); // Check both obstacle and occupied flags
 }
 
-// Function to find a random empty cell
 bool AGridManager::FindRandomEmptyCell(int32& OutX, int32& OutY)
 {
-    TArray<FIntPoint> EmptyCells;
+    if (GridCells.Num() == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GridCells is empty!"));
+        return false;
+    }
 
-    // Find all empty cells
+    // Collect all empty cells
+    TArray<FVector2D> EmptyCells;
     for (int32 X = 0; X < GridSizeX; X++)
     {
         for (int32 Y = 0; Y < GridSizeY; Y++)
         {
-            if (!GridArray[X][Y]->IsObstacle())
+            AGridCell* Cell = GetCellAtPosition(FVector2D(X, Y));
+            if (Cell && !Cell->IsObstacle() && !Cell->IsOccupied())
             {
-                EmptyCells.Add(FIntPoint(X, Y));
+                EmptyCells.Add(FVector2D(X, Y));
             }
         }
     }
 
+    // Check if there are any empty cells
     if (EmptyCells.Num() == 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("No empty cells available!"));
+        UE_LOG(LogTemp, Warning, TEXT("No empty cells found!"));
         return false;
     }
 
-    // Pick a random empty cell
-    int32 RandomIndex = FMath::RandRange(0, EmptyCells.Num() - 1);
-    OutX = EmptyCells[RandomIndex].X;
-    OutY = EmptyCells[RandomIndex].Y;
+    // Select a random empty cell
+    FVector2D RandomCell = EmptyCells[FMath::RandRange(0, EmptyCells.Num() - 1)];
+    OutX = RandomCell.X;
+    OutY = RandomCell.Y;
 
     return true;
 }

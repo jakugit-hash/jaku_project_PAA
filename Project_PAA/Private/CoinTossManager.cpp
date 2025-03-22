@@ -21,5 +21,16 @@ bool ACoinTossManager::PerformCoinToss()
 void ACoinTossManager::DecideStartingPlayer()
 {
 	bool bIsPlayerTurn = PerformCoinToss();
-	OnCoinTossComplete.Broadcast(bIsPlayerTurn);
+	UE_LOG(LogTemp, Warning, TEXT("Coin toss result: %s"), bIsPlayerTurn ? TEXT("Player") : TEXT("AI"));
+
+	// Broadcast the result
+	if (OnCoinTossComplete.IsBound())
+	{
+		OnCoinTossComplete.Broadcast(bIsPlayerTurn);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("OnCoinTossComplete is not bound!"));
+	}
 }
+
