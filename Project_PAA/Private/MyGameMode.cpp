@@ -270,11 +270,119 @@ bool AMyGameMode::IsCellValidForPlacement(FVector2D CellPosition)
     return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
 
+
+
+void AMyGameMode::HandleCellClick(FVector2D CellPosition)
+{
+    if (!GridManager)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GridManager is null!"));
+        return;
+    }
+    // Switch turns
+    bIsPlayerTurn = !bIsPlayerTurn;
+
+    if (bIsPlayerTurn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player's turn to place a unit."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AI's turn to place a unit."));
+        HandleAIPlacement();
+    }
+    // Check if it's the player's turn to place units
+    if (!bIsPlayerTurn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("It's not the player's turn to place units."));
+        return;
+    }
+
+   
+
+    // Check if the selected cell is valid for placement
+    AGridCell* Cell = GridManager->GetCellAtPosition(CellPosition);
+    if (Cell && !Cell->IsObstacle() && !Cell->IsOccupied())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cell is valid for placement."));
+
+        // Place the selected unit
+        PlaceUnit(SelectedUnitType, CellPosition);
+
+        // Mark the cell as occupied
+        Cell->SetOccupied(true);
+
+        // Log the placement
+        FString CellName = GridManager->GetCellName(CellPosition.X, CellPosition.Y);
+        UE_LOG(LogTemp, Warning, TEXT("%s placed at position %s"), *SelectedUnitType, *CellName);
+
+        // Remove the placed unit from the list
+        PlayerUnitsToPlace.Remove(SelectedUnitType);
+        UE_LOG(LogTemp, Warning, TEXT("Player placed a %s. Remaining units: %d"), *SelectedUnitType, PlayerUnitsToPlace.Num());
+
+        // Check if all units have been placed
+        if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("All units placed. Starting the game."));
+            StartPlayerTurn();
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid cell for placement."));
+    }
+}
+
 void AMyGameMode::StartPlayerTurn()
 {
     UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
-    // Implement player turn logic here
+
+    // Check if the player has units left to place
+    if (PlayerUnitsToPlace.Num() > 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player has units to place. Waiting for selection..."));
+
+        // Enable input for unit selection
+        APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+        if (PlayerController)
+        {
+            PlayerController->SetInputMode(FInputModeGameAndUI());
+            PlayerController->bShowMouseCursor = true;
+            UE_LOG(LogTemp, Warning, TEXT("Player input enabled!"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("PlayerController is null!"));
+        }
+
+        // Display the PlacementWidget for unit selection
+        if (PlacementWidgetClass)
+        {
+            PlacementWidget = CreateWidget<UPlacementWidget>(GetWorld(), PlacementWidgetClass);
+            if (PlacementWidget)
+            {
+                PlacementWidget->SetGameMode(this);
+                PlacementWidget->AddToViewport();
+                UE_LOG(LogTemp, Warning, TEXT("PlacementWidget created and displayed!"));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("Failed to create PlacementWidget!"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("PlacementWidgetClass is null!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player has no units left to place. Switching to AI turn."));
+        bIsPlayerTurn = false;
+        HandleAIPlacement();
+    }
 }
+
 
 void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {

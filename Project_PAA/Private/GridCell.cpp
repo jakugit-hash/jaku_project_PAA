@@ -58,6 +58,7 @@ void AGridCell::BeginPlay()
 
     // Bind the click event
     OnClicked.AddDynamic(this, &AGridCell::OnCellClicked);
+    UE_LOG(LogTemp, Warning, TEXT("GridCell %s initialized!"), *CellName);
 }
 
 // Set obstacle status
@@ -140,15 +141,15 @@ void AGridCell::OnCellClicked(AActor* TouchedActor, FKey ButtonPressed)
 {
     UE_LOG(LogTemp, Warning, TEXT("Cell %s clicked!"), *CellName);
 
-    // Notify the GridManager about the click
-    AGridManager* GridManager = Cast<AGridManager>(GetOwner());
-    if (GridManager)
+    // Notify the GameMode about the click
+    AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode());
+    if (GameMode)
     {
-        GridManager->HandleCellClick(FVector2D(GridPositionX, GridPositionY));
+        GameMode->HandleCellClick(FVector2D(GridPositionX, GridPositionY));
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("GridManager is null!"));
+        UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
     }
 }
 

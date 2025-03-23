@@ -6,6 +6,7 @@
 #include "MyGameMode.h"
 #include "GridManager.generated.h"
 
+
 UCLASS()
 class PROJECT_PAA_API AGridManager : public AActor
 {
@@ -16,7 +17,6 @@ public:
 
 protected:
     virtual void BeginPlay() override;
-    virtual void BeginDestroy() override;
 
 public:
     // Grid dimensions and properties
@@ -63,4 +63,13 @@ private:
     // Spawn probability for obstacles
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid", meta = (ClampMin = "0.0", ClampMax = "1.0"), meta = (AllowPrivateAccess = "true"))
     float SpawnProbability = 0.15f;
+
+    // Obstacle Blueprint Reference
+    UPROPERTY(EditAnywhere, Category = "Grid")
+    TSubclassOf<AActor> ObstacleBlueprint;
+
+    // Obstacle Handling
+    void CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap);
+    bool AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMap);
+    void BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY);
 };

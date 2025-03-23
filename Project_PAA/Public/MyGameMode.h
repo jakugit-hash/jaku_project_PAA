@@ -41,6 +41,7 @@ public:
 
     // Function to start the player's turn
     void StartPlayerTurn();
+    void HandleCellClick(FVector2D Vector2);
 
 private:
     // Track which units need to be placed

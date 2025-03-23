@@ -77,25 +77,153 @@ void AGridManager::CreateGrid()
 // Generate obstacles
 void AGridManager::GenerateObstacles()
 {
-    if (GridCells.Num() == 0)
+    if (!ObstacleBlueprint)
     {
-        UE_LOG(LogTemp, Error, TEXT("GridCells is empty! Cannot generate obstacles."));
+        UE_LOG(LogTemp, Error, TEXT("ObstacleBlueprint is not set!"));
         return;
     }
 
-    // Generate obstacles
-    for (AGridCell* Cell : GridCells)
+    UE_LOG(LogTemp, Warning, TEXT("Generating obstacles with probability: %f"), SpawnProbability);
+
+    TArray<TArray<bool>> LocalObstacleMap;
+    CreateObstacleMap(LocalObstacleMap);
+
+    for (int32 X = 0; X < GridSizeX; X++)
     {
-        if (Cell && FMath::FRand() < SpawnProbability)
+        for (int32 Y = 0; Y < GridSizeY; Y++)
         {
-            Cell->SetObstacle(true);
+            if (LocalObstacleMap[X][Y]) // If the cell should contain an obstacle
+            {
+                FVector TilePosition = GetCellWorldPosition(X, Y);
+                AActor* NewObstacle = GetWorld()->SpawnActor<AActor>(ObstacleBlueprint, TilePosition, FRotator::ZeroRotator);
+                if (NewObstacle)
+                {
+                    AGridCell* Cell = GetCellAtPosition(FVector2D(X, Y));
+                    if (Cell)
+                    {
+                        Cell->SetObstacle(true);
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to spawn obstacle at: X=%d, Y=%d"), X, Y);
+                }
+            }
         }
     }
 
     UE_LOG(LogTemp, Warning, TEXT("Obstacle generation completed."));
 }
 
-// Handle cell clicks
+// Create the obstacle map
+void AGridManager::CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap)
+{
+    // Ensure OutObstacleMap has correct dimensions
+    OutObstacleMap.SetNum(GridSizeX);
+    for (int32 X = 0; X < GridSizeX; X++)
+    {
+        OutObstacleMap[X].SetNum(GridSizeY, EAllowShrinking::No);
+        for (int32 Y = 0; Y < GridSizeY; Y++)
+        {
+            OutObstacleMap[X][Y] = false; // Initialize as empty
+        }
+    }
+
+    for (int32 X = 0; X < GridSizeX; X++)
+    {
+        for (int32 Y = 0; Y < GridSizeY; Y++)
+        {
+            if (FMath::FRand() <= SpawnProbability)
+            {
+                OutObstacleMap[X][Y] = true;
+
+                // Validate connectivity
+                if (!AreAllCellsReachable(OutObstacleMap))
+                {
+                    OutObstacleMap[X][Y] = false; // Remove obstacle if it blocks paths
+                }
+            }
+        }
+    }
+}
+
+// Check if all cells are reachable
+bool AGridManager::AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMap)
+{
+    // Initialize visited map
+    TArray<TArray<bool>> Visited;
+    Visited.SetNum(GridSizeX);
+    for (int32 X = 0; X < GridSizeX; X++)
+    {
+        Visited[X].SetNum(GridSizeY, EAllowShrinking::No);
+    }
+
+    // Find a starting cell that is not an obstacle
+    int32 StartX = -1, StartY = -1;
+    for (int32 X = 0; X < GridSizeX; X++)
+    {
+        for (int32 Y = 0; Y < GridSizeY; Y++)
+        {
+            if (!InObstacleMap[X][Y])
+            {
+                StartX = X;
+                StartY = Y;
+                break;
+            }
+        }
+        if (StartX != -1) break;
+    }
+
+    if (StartX == -1) return false; // No empty cells
+
+    // Perform BFS to visit all reachable cells
+    BFS(InObstacleMap, Visited, StartX, StartY);
+
+    // Check if all non-obstacle cells were visited
+    for (int32 X = 0; X < GridSizeX; X++)
+    {
+        for (int32 Y = 0; Y < GridSizeY; Y++)
+        {
+            if (!InObstacleMap[X][Y] && !Visited[X][Y])
+            {
+                return false; // Unreachable cell found
+            }
+        }
+    }
+    return true; // All cells are reachable
+}
+
+// BFS implementation
+void AGridManager::BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY)
+{
+    TQueue<FIntPoint> Queue;
+    Queue.Enqueue(FIntPoint(StartX, StartY));
+    Visited[StartX][StartY] = true;
+
+    while (!Queue.IsEmpty())
+    {
+        FIntPoint Current;
+        Queue.Dequeue(Current);
+
+        // Check adjacent cells (up, down, left, right)
+        TArray<FIntPoint> Directions = { FIntPoint(-1, 0), FIntPoint(1, 0), FIntPoint(0, -1), FIntPoint(0, 1) };
+        for (const FIntPoint& Dir : Directions)
+        {
+            int32 NewX = Current.X + Dir.X;
+            int32 NewY = Current.Y + Dir.Y;
+
+            // Check if the new cell is valid, not an obstacle, and not visited
+            if (NewX >= 0 && NewX < GridSizeX && NewY >= 0 && NewY < GridSizeY &&
+                !InObstacleMap[NewX][NewY] && !Visited[NewX][NewY])
+            {
+                Visited[NewX][NewY] = true;
+                Queue.Enqueue(FIntPoint(NewX, NewY));
+            }
+        }
+    }
+}
+
+// Function to handle cell clicks
 void AGridManager::HandleCellClick(FVector2D CellPosition)
 {
     if (GridCells.Num() == 0)
@@ -116,19 +244,19 @@ void AGridManager::HandleCellClick(FVector2D CellPosition)
     }
 }
 
-// Get cell name
+// Function to get cell name
 FString AGridManager::GetCellName(int32 X, int32 Y)
 {
     return FString::Printf(TEXT("%c%d"), 'A' + X, Y + 1);
 }
 
-// Get world position of a grid cell
+// Function to get world position of a grid cell
 FVector AGridManager::GetCellWorldPosition(int32 X, int32 Y)
 {
     return FVector(X * CellSize, Y * CellSize, 1.0f);
 }
 
-// Find a random empty cell
+// Function to find a random empty cell
 bool AGridManager::FindRandomEmptyCell(int32& OutX, int32& OutY)
 {
     if (GridCells.Num() == 0)
@@ -168,7 +296,7 @@ bool AGridManager::FindRandomEmptyCell(int32& OutX, int32& OutY)
     return false;
 }
 
-// Get a cell at a specific position
+// Function to get a cell at a specific position
 AGridCell* AGridManager::GetCellAtPosition(FVector2D Position) const
 {
     int32 X = FMath::RoundToInt(Position.X);
@@ -188,7 +316,7 @@ AGridCell* AGridManager::GetCellAtPosition(FVector2D Position) const
     return nullptr;
 }
 
-// Check if a cell is free
+// Function to check if a cell is free
 bool AGridManager::IsCellFree(FVector2D CellPosition) const
 {
     AGridCell* Cell = GetCellAtPosition(CellPosition);
@@ -196,7 +324,7 @@ bool AGridManager::IsCellFree(FVector2D CellPosition) const
 }
 
 // Called when the actor is being destroyed
-void AGridManager::BeginDestroy()
+void AGridManager::DestroyGrid()
 {
     Super::BeginDestroy();
 
