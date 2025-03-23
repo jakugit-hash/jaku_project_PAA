@@ -1,5 +1,3 @@
-
-
 #include "CoinTossManager.h"
 
 ACoinTossManager::ACoinTossManager()
@@ -33,4 +31,3 @@ void ACoinTossManager::DecideStartingPlayer()
 		UE_LOG(LogTemp, Error, TEXT("OnCoinTossComplete is not bound!"));
 	}
 }
-

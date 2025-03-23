@@ -22,7 +22,6 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
-	
 	// Functions to handle button clicks
 	UFUNCTION()
 	void OnSniperButtonClicked();

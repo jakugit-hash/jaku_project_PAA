@@ -16,7 +16,7 @@ AMyGameMode::AMyGameMode()
     GridManager = nullptr;
     PlacementWidget = nullptr;
     CoinTossManager = nullptr;
-    
+
     // Assign the PlacementWidgetClass in the constructor
     static ConstructorHelpers::FClassFinder<UUserWidget> PlacementWidgetBP(TEXT("/Game/widgets/WBP_PlacementWidget"));
     if (PlacementWidgetBP.Succeeded())
@@ -28,6 +28,7 @@ AMyGameMode::AMyGameMode()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to find PlacementWidgetClass!"));
     }
+
     // Assign the CoinWidgetClass in the constructor
     static ConstructorHelpers::FClassFinder<UUserWidget> CoinWidgetBP(TEXT("/Game/Widgets/WBP_CoinWidget"));
     if (CoinWidgetBP.Succeeded())
@@ -41,21 +42,21 @@ AMyGameMode::AMyGameMode()
     }
 }
 
-
 void AMyGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Spawn the CoinTossManager
-    CoinTossManager = GetWorld()->SpawnActor<ACoinTossManager>();
-    if (!CoinTossManager)
+    // Find and assign the GridManager
+    GridManager = Cast<AGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AGridManager::StaticClass()));
+    if (!GridManager)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn CoinTossManager!"));
+        UE_LOG(LogTemp, Error, TEXT("GridManager not found in the level!"));
         return;
     }
-
-    // Bind the coin toss result handler
-    CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GridManager found and assigned successfully!"));
+    }
 
     // Spawn the CoinTossManager
     CoinTossManager = GetWorld()->SpawnActor<ACoinTossManager>();
@@ -99,7 +100,9 @@ void AMyGameMode::BeginPlay()
 void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 {
     UE_LOG(LogTemp, Warning, TEXT("AMyGameMode::HandleCoinTossResult called! Result: %s"), bIsPlayerTurnResult ? TEXT("Player") : TEXT("AI"));
+
     // Set who starts the placement phase
+    bIsPlayerTurn = bIsPlayerTurnResult;
 
     // Remove the CoinWidget from the viewport
     if (CoinWidget)
@@ -108,7 +111,6 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
         CoinWidget = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed from viewport!"));
     }
-    bIsPlayerTurn = bIsPlayerTurnResult;
 
     // Start the placement phase
     StartPlacementPhase();
@@ -117,6 +119,7 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 void AMyGameMode::StartPlacementPhase()
 {
     UE_LOG(LogTemp, Warning, TEXT("AMyGameMode::StartPlacementPhase called!"));
+
     // Initialize units to place
     PlayerUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
     AIUnitsToPlace = { TEXT("Sniper"), TEXT("Brawler") };
@@ -149,7 +152,6 @@ void AMyGameMode::StartPlacementPhase()
     {
         UE_LOG(LogTemp, Error, TEXT("PlacementWidgetClass is null!"));
     }
-    
 
     // Start with the winner of the coin toss
     if (bIsPlayerTurn)
@@ -170,8 +172,12 @@ void AMyGameMode::SetSelectedUnitType(const FString& UnitType)
 
 void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
 {
+    UE_LOG(LogTemp, Warning, TEXT("Attempting to place unit at (%f, %f)"), CellPosition.X, CellPosition.Y);
+
     if (IsCellValidForPlacement(CellPosition))
     {
+        UE_LOG(LogTemp, Warning, TEXT("Cell is valid for placement."));
+
         // Place the selected unit
         PlaceUnit(SelectedUnitType, CellPosition);
 
@@ -179,10 +185,12 @@ void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
         if (bIsPlayerTurn)
         {
             PlayerUnitsToPlace.Remove(SelectedUnitType);
+            UE_LOG(LogTemp, Warning, TEXT("Player placed a %s. Remaining units: %d"), *SelectedUnitType, PlayerUnitsToPlace.Num());
         }
         else
         {
             AIUnitsToPlace.Remove(SelectedUnitType);
+            UE_LOG(LogTemp, Warning, TEXT("AI placed a %s. Remaining units: %d"), *SelectedUnitType, AIUnitsToPlace.Num());
         }
 
         // Check if all units have been placed
@@ -234,6 +242,8 @@ void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
     FVector WorldPosition = GridManager->GetCellWorldPosition(CellPosition.X, CellPosition.Y);
     AUnit* NewUnit = nullptr;
 
+    UE_LOG(LogTemp, Warning, TEXT("Attempting to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+
     if (UnitType == TEXT("Sniper"))
     {
         NewUnit = GetWorld()->SpawnActor<ASniper>(ASniper::StaticClass(), WorldPosition, FRotator::ZeroRotator);
@@ -247,6 +257,10 @@ void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
     {
         NewUnit->SetGridPosition(CellPosition);
         UE_LOG(LogTemp, Warning, TEXT("%s placed at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
     }
 }
 
@@ -273,11 +287,11 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
         GridManager = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("GridManager destroyed!"));
     }
+
     // Remove and destroy widgets
     if (CoinWidget)
     {
         CoinWidget->RemoveFromParent();
-        CoinWidget->ConditionalBeginDestroy(); // Ensure the widget is destroyed
         CoinWidget = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed and destroyed!"));
     }
@@ -285,12 +299,9 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (PlacementWidget)
     {
         PlacementWidget->RemoveFromParent();
-        PlacementWidget->ConditionalBeginDestroy(); // Ensure the widget is destroyed
         PlacementWidget = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("PlacementWidget removed and destroyed!"));
     }
-
-   
 
     // Destroy CoinTossManager if it exists
     if (CoinTossManager)
@@ -299,15 +310,6 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
         CoinTossManager = nullptr;
         UE_LOG(LogTemp, Warning, TEXT("CoinTossManager destroyed!"));
     }
-
-    // Destroy any dynamically spawned units
-    TArray<AActor*> Units;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AUnit::StaticClass(), Units);
-    for (AActor* Unit : Units)
-    {
-        Unit->Destroy();
-    }
-    UE_LOG(LogTemp, Warning, TEXT("All units destroyed!"));
 
     // Reset state variables
     PlayerUnitsToPlace.Empty();

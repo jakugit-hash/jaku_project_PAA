@@ -1,5 +1,3 @@
-
-
 #include "CoinWidget.h"
 #include "CoinTossManager.h"
 #include "Components/Button.h"
@@ -16,7 +14,7 @@ void UCoinWidget::NativeConstruct()
 
 	// Log to verify NativeConstruct is called
 	UE_LOG(LogTemp, Warning, TEXT("CoinWidget NativeConstruct called!"));
-	
+
 	// Bind the CoinButton's OnClicked event
 	if (CoinButton)
 	{
@@ -45,6 +43,7 @@ void UCoinWidget::OnCoinButtonClicked()
 		UE_LOG(LogTemp, Error, TEXT("CoinTossManager is null!"));
 	}
 }
+
 void UCoinWidget::NativeDestruct()
 {
 	Super::NativeDestruct();
@@ -54,6 +53,7 @@ void UCoinWidget::NativeDestruct()
 	{
 		CoinButton->OnClicked.RemoveAll(this);
 	}
+
 	// Clear any other bound delegates
 	if (CoinTossManager)
 	{

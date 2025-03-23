@@ -1,5 +1,3 @@
-
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,7 +6,6 @@
 
 // Forward declarations
 class ACoinTossManager;
-class UCanvas;
 class UButton;
 class UTextBlock;
 
@@ -25,7 +22,7 @@ protected:
 	// Called when the widget is constructed
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	
+
 	// Function to handle the CoinButton click
 	UFUNCTION()
 	void OnCoinButtonClicked();
@@ -40,7 +37,6 @@ private:
 	UButton* CoinButton;
 
 	// Bind the ResultText
-	
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ResultText;
 };
