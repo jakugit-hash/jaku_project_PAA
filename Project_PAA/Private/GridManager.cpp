@@ -59,7 +59,19 @@ void AGridManager::CreateGrid()
             {
                 NewCell->SetCellName(FString::Printf(TEXT("%c%d"), 'A' + X, Y + 1));
                 NewCell->SetGridPosition(X, Y);
-                NewCell->SetOwner(this); // Set GridManager as the owner
+                NewCell->SetOwner(this);
+                // Debug: Visualize collision
+                NewCell->CellMesh->SetHiddenInGame(false);
+                NewCell->CellMesh->SetVisibility(true);
+                
+                if (UStaticMeshComponent* Mesh = NewCell->FindComponentByClass<UStaticMeshComponent>())
+                {
+                    Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+                    Mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+                    Mesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+                    Mesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+                }
+                
                 GridCells.Add(NewCell);
                 UE_LOG(LogTemp, Warning, TEXT("Created grid cell at (%d, %d)"), X, Y);
             }
@@ -73,6 +85,8 @@ void AGridManager::CreateGrid()
     bGridCreated = true;
     UE_LOG(LogTemp, Warning, TEXT("Grid creation completed with %d cells."), GridCells.Num());
 }
+
+
 
 // Generate obstacles
 void AGridManager::GenerateObstacles()

@@ -47,6 +47,16 @@ AGridCell::AGridCell()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to load obstacle material for GridCell!"));
     }
+    if (CellMesh)
+    {
+        CellMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        CellMesh->SetCollisionObjectType(ECC_WorldStatic);
+        CellMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+        CellMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+        CellMesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+        CellMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+    }
+    
 }
 
 void AGridCell::BeginPlay()
@@ -55,10 +65,42 @@ void AGridCell::BeginPlay()
 
     // Enable input for this actor
     EnableInput(GetWorld()->GetFirstPlayerController());
+    
+    // Get the static mesh component
+    UStaticMeshComponent* MeshComponent = FindComponentByClass<UStaticMeshComponent>();
+    if (MeshComponent)
+    {
+        // Setup click event using OnComponentClicked
+        MeshComponent->OnClicked.AddDynamic(this, &AGridCell::OnCellClicked);
+        UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click event bound to mesh component"), *CellName);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("GridCell %s: No mesh component found!"), *CellName);
+    }
+}
 
-    // Bind the click event
-    OnClicked.AddDynamic(this, &AGridCell::OnCellClicked);
-    UE_LOG(LogTemp, Warning, TEXT("GridCell %s initialized!"), *CellName);
+void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed)
+{
+    UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click detected with button %s"), *CellName, *ButtonPressed.ToString());
+
+    if (ClickedComponent)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ClickedComponent: %s"), *ClickedComponent->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("Component Collision: %d"), 
+            ClickedComponent->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+    }
+
+    // Notify GameMode
+    if (AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Notifying GameMode about click at (%d, %d)"), GridPositionX, GridPositionY);
+        GameMode->HandleCellClick(FVector2D(GridPositionX, GridPositionY));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to get GameMode!"));
+    }
 }
 
 // Set obstacle status
@@ -137,7 +179,7 @@ bool AGridCell::IsOccupied() const
 }
 
 // Handle cell click
-void AGridCell::OnCellClicked(AActor* TouchedActor, FKey ButtonPressed)
+/*void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed)
 {
     UE_LOG(LogTemp, Warning, TEXT("Cell %s clicked!"), *CellName);
 
@@ -151,7 +193,7 @@ void AGridCell::OnCellClicked(AActor* TouchedActor, FKey ButtonPressed)
     {
         UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
     }
-}
+}*/
 
 // Set grid position
 void AGridCell::SetGridPosition(int32 X, int32 Y)

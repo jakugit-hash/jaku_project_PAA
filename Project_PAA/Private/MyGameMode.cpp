@@ -136,11 +136,17 @@ void AMyGameMode::StartPlacementPhase()
             PlacementWidget->AddToViewport();
 
             // Set input mode to UI only
-            APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-            if (PlayerController)
+            if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
             {
-                PlayerController->SetInputMode(FInputModeUIOnly());
+                FInputModeGameAndUI InputMode;
+                InputMode.SetWidgetToFocus(PlacementWidget->TakeWidget());
+                InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+                PlayerController->bEnableClickEvents = true;
+                PlayerController->bEnableMouseOverEvents = true;                PlayerController->SetInputMode(InputMode);
                 PlayerController->bShowMouseCursor = true;
+                // Debug: Print input settings
+                UE_LOG(LogTemp, Warning, TEXT("PlayerController settings - Click: %d, MouseOver: %d"), 
+                    PlayerController->bEnableClickEvents, PlayerController->bEnableMouseOverEvents);
             }
         }
         else
@@ -172,68 +178,64 @@ void AMyGameMode::SetSelectedUnitType(const FString& UnitType)
 
 void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
 {
-    UE_LOG(LogTemp, Warning, TEXT("Attempting to place unit at (%f, %f)"), CellPosition.X, CellPosition.Y);
+    // Validate
+    if (!GridManager || !IsCellValidForPlacement(CellPosition)) return;
 
-    if (IsCellValidForPlacement(CellPosition))
+    // Determine which team is placing
+    bool bIsPlayerPlacing = bIsPlayerTurn;
+    FString PlacingUnitType = SelectedUnitType;
+
+    // AI uses its own unit selection
+    if (!bIsPlayerPlacing && AIUnitsToPlace.Num() > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Cell is valid for placement."));
+        PlacingUnitType = AIUnitsToPlace[0]; // AI will place its first available unit
+    }
 
-        // Place the selected unit
-        PlaceUnit(SelectedUnitType, CellPosition);
+    // Place the unit
+    PlaceUnit(PlacingUnitType, CellPosition);
 
-        // Remove the placed unit from the list
-        if (bIsPlayerTurn)
-        {
-            PlayerUnitsToPlace.Remove(SelectedUnitType);
-            UE_LOG(LogTemp, Warning, TEXT("Player placed a %s. Remaining units: %d"), *SelectedUnitType, PlayerUnitsToPlace.Num());
-        }
-        else
-        {
-            AIUnitsToPlace.Remove(SelectedUnitType);
-            UE_LOG(LogTemp, Warning, TEXT("AI placed a %s. Remaining units: %d"), *SelectedUnitType, AIUnitsToPlace.Num());
-        }
-
-        // Check if all units have been placed
-        if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("All units placed. Starting the game."));
-            StartPlayerTurn();
-        }
-        else
-        {
-            // Switch turns
-            bIsPlayerTurn = !bIsPlayerTurn;
-
-            if (bIsPlayerTurn)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Player's turn to place a unit."));
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("AI's turn to place a unit."));
-                HandleAIPlacement();
-            }
-        }
+    // Update game state
+    if (bIsPlayerPlacing)
+    {
+        PlayerUnitsToPlace.Remove(PlacingUnitType);
+        SelectedUnitType = ""; // Reset player selection
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid cell for placement."));
+        AIUnitsToPlace.Remove(PlacingUnitType);
+    }
+
+    // Check if placement phase is complete
+    if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
+    {
+        StartPlayerTurn();
+        return;
+    }
+
+    // Switch turns
+    bIsPlayerTurn = !bIsPlayerTurn;
+    
+    if (bIsPlayerTurn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player's turn to place"));
+    }
+    else
+    {
+        HandleAIPlacement();
     }
 }
 
 void AMyGameMode::HandleAIPlacement()
 {
-    // AI selects a random unit to place
-    if (AIUnitsToPlace.Num() > 0)
-    {
-        SelectedUnitType = AIUnitsToPlace[FMath::RandRange(0, AIUnitsToPlace.Num() - 1)];
+    if (AIUnitsToPlace.Num() == 0) return;
 
-        // Find a random valid cell for placement
-        int32 X, Y;
-        if (GridManager->FindRandomEmptyCell(X, Y))
-        {
-            HandleUnitPlacement(FVector2D(X, Y));
-        }
+    // Find random empty cell
+    int32 X, Y;
+    if (GridManager->FindRandomEmptyCell(X, Y))
+    {
+        // Use the first available AI unit
+        FString UnitToPlace = AIUnitsToPlace[0];
+        HandleUnitPlacement(FVector2D(X, Y));
     }
 }
 
@@ -279,26 +281,13 @@ void AMyGameMode::HandleCellClick(FVector2D CellPosition)
         UE_LOG(LogTemp, Error, TEXT("GridManager is null!"));
         return;
     }
-    // Switch turns
-    bIsPlayerTurn = !bIsPlayerTurn;
 
-    if (bIsPlayerTurn)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Player's turn to place a unit."));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("AI's turn to place a unit."));
-        HandleAIPlacement();
-    }
     // Check if it's the player's turn to place units
     if (!bIsPlayerTurn)
     {
         UE_LOG(LogTemp, Warning, TEXT("It's not the player's turn to place units."));
         return;
     }
-
-   
 
     // Check if the selected cell is valid for placement
     AGridCell* Cell = GridManager->GetCellAtPosition(CellPosition);
@@ -325,6 +314,12 @@ void AMyGameMode::HandleCellClick(FVector2D CellPosition)
         {
             UE_LOG(LogTemp, Warning, TEXT("All units placed. Starting the game."));
             StartPlayerTurn();
+        }
+        else
+        {
+            // Switch turns
+            bIsPlayerTurn = false;
+            HandleAIPlacement();
         }
     }
     else
@@ -380,6 +375,13 @@ void AMyGameMode::StartPlayerTurn()
         UE_LOG(LogTemp, Warning, TEXT("Player has no units left to place. Switching to AI turn."));
         bIsPlayerTurn = false;
         HandleAIPlacement();
+    }
+
+    if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+    {
+        PC->bShowMouseCursor = true;
+        PC->bEnableClickEvents = true;
+        PC->bEnableMouseOverEvents = true;
     }
 }
 

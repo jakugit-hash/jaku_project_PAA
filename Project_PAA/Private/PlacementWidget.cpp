@@ -35,27 +35,23 @@ void UPlacementWidget::NativeConstruct()
 
 void UPlacementWidget::OnSniperButtonClicked()
 {
-	if (GameMode)
+	if (GameMode && GameMode->GetPlayerUnitsToPlace().Contains("Sniper"))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Sniper button clicked!"));
-		GameMode->SetSelectedUnitType(TEXT("Sniper"));
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
+		GameMode->SetSelectedUnitType("Sniper");
+		// Visual feedback
+		SniperButton->SetBackgroundColor(FLinearColor::Green);
+		BrawlerButton->SetBackgroundColor(FLinearColor::White);
 	}
 }
 
 void UPlacementWidget::OnBrawlerButtonClicked()
 {
-	if (GameMode)
+	if (GameMode && GameMode->GetPlayerUnitsToPlace().Contains("Brawler"))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Brawler button clicked!"));
-		GameMode->SetSelectedUnitType(TEXT("Brawler"));
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
+		GameMode->SetSelectedUnitType("Brawler");
+		// Visual feedback
+		BrawlerButton->SetBackgroundColor(FLinearColor::Green);
+		SniperButton->SetBackgroundColor(FLinearColor::White);
 	}
 }
 

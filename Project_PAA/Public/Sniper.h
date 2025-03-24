@@ -5,7 +5,7 @@
 #include "Sniper.generated.h"
 
 /**
- * Sniper unit class.
+ * Sniper unit class.a
  */
 UCLASS()
 class PROJECT_PAA_API ASniper : public AUnit

@@ -74,6 +74,10 @@ private:
     UPROPERTY()
     ACoinTossManager* CoinTossManager;
 
+public:
+    UFUNCTION(BlueprintCallable)
+    const TArray<FString>& GetPlayerUnitsToPlace() const { return PlayerUnitsToPlace; }
+
     // Track whose turn it is to place units
     bool bIsPlayerTurn;
 

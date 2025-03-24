@@ -55,7 +55,7 @@ public:
 
 	// Handle cell click
 	UFUNCTION()
-	void OnCellClicked(AActor* TouchedActor, FKey ButtonPressed);
+	void OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed);
 
 private:
 	// Default and obstacle materials
