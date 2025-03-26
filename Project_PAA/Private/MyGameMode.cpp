@@ -1,8 +1,10 @@
 #include "MyGameMode.h"
 #include "GridManager.h"
+#include "Components/Button.h"
 #include "PlacementWidget.h"
 #include "Sniper.h"
 #include "Brawler.h"
+#include "Unit.h"
 #include "CoinWidget.h"
 #include "CoinTossManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -176,54 +178,76 @@ void AMyGameMode::SetSelectedUnitType(const FString& UnitType)
     SelectedUnitType = UnitType;
 }
 
+bool AMyGameMode::CanSelectUnitType(const FString& UnitType) const
+{
+    return PlayerUnitsToPlace.Contains(UnitType);
+}
+
+
 void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
 {
-    // Validate
-    if (!GridManager || !IsCellValidForPlacement(CellPosition)) return;
-
-    // Determine which team is placing
-    bool bIsPlayerPlacing = bIsPlayerTurn;
-    FString PlacingUnitType = SelectedUnitType;
-
-    // AI uses its own unit selection
-    if (!bIsPlayerPlacing && AIUnitsToPlace.Num() > 0)
+    // Validate grid and cell
+    if (!GridManager || !IsCellValidForPlacement(CellPosition)) 
     {
-        PlacingUnitType = AIUnitsToPlace[0]; // AI will place its first available unit
+        return;
     }
 
-    // Place the unit
-    PlaceUnit(PlacingUnitType, CellPosition);
-
-    // Update game state
-    if (bIsPlayerPlacing)
+    // Player placement
+    if (bIsPlayerTurn)
     {
-        PlayerUnitsToPlace.Remove(PlacingUnitType);
-        SelectedUnitType = ""; // Reset player selection
+        // STRICT validation - must have unit type available
+        if (SelectedUnitType.IsEmpty() || !CanSelectUnitType(SelectedUnitType)  || 
+           (SelectedUnitType == "Sniper" && bHasPlacedSniper) ||
+           (SelectedUnitType == "Brawler" && bHasPlacedBrawler))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Cannot place %s - invalid selection"), *SelectedUnitType);
+            return;
+        }
+
+        // Place unit
+        if (PlaceUnit(SelectedUnitType, CellPosition))
+        {
+
+            if (SelectedUnitType == "Sniper") bHasPlacedSniper = true;
+            else if (SelectedUnitType == "Brawler") bHasPlacedBrawler = true;
+            
+            PlayerUnitsToPlace.Remove(SelectedUnitType);
+            SelectedUnitType = "";
+            
+            if (PlacementWidget) 
+            {
+                PlacementWidget->ClearSelection();
+                // Manually update button states
+                PlacementWidget->SniperButton->SetIsEnabled(PlayerUnitsToPlace.Contains("Sniper"));
+                PlacementWidget->BrawlerButton->SetIsEnabled(PlayerUnitsToPlace.Contains("Brawler"));
+                PlacementWidget->SniperButton->SetIsEnabled(!bHasPlacedSniper);
+                PlacementWidget->BrawlerButton->SetIsEnabled(!bHasPlacedBrawler);
+            }
+        }
     }
-    else
+    // AI placement (unchanged)
+    else if (AIUnitsToPlace.Num() > 0)
     {
-        AIUnitsToPlace.Remove(PlacingUnitType);
+        FString AISelection = AIUnitsToPlace[0];
+        PlaceUnit(AISelection, CellPosition);
+        AIUnitsToPlace.RemoveAt(0);
     }
 
-    // Check if placement phase is complete
+    // Original turn logic below
     if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
     {
         StartPlayerTurn();
         return;
     }
 
-    // Switch turns
     bIsPlayerTurn = !bIsPlayerTurn;
     
-    if (bIsPlayerTurn)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Player's turn to place"));
-    }
-    else
+    if (!bIsPlayerTurn && AIUnitsToPlace.Num() > 0)
     {
         HandleAIPlacement();
     }
 }
+
 
 void AMyGameMode::HandleAIPlacement()
 {
@@ -239,12 +263,12 @@ void AMyGameMode::HandleAIPlacement()
     }
 }
 
-void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
+bool AMyGameMode::PlaceUnit(const FString& UnitType, const FVector2D& CellPosition)
 {
     FVector WorldPosition = GridManager->GetCellWorldPosition(CellPosition.X, CellPosition.Y);
     AUnit* NewUnit = nullptr;
 
-    UE_LOG(LogTemp, Warning, TEXT("Attempting to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+   
 
     if (UnitType == TEXT("Sniper"))
     {
@@ -259,10 +283,12 @@ void AMyGameMode::PlaceUnit(FString UnitType, FVector2D CellPosition)
     {
         NewUnit->SetGridPosition(CellPosition);
         UE_LOG(LogTemp, Warning, TEXT("%s placed at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+        return true;
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+        return false;
+        //UE_LOG(LogTemp, Error, TEXT("Failed to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
     }
 }
 
@@ -272,9 +298,18 @@ bool AMyGameMode::IsCellValidForPlacement(FVector2D CellPosition)
     return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
 
+bool AMyGameMode::CanPlaceSniper() const
+{
+    return !bHasPlacedSniper && PlayerUnitsToPlace.Contains("Sniper");
+}
+
+bool AMyGameMode::CanPlaceBrawler() const
+{
+    return !bHasPlacedBrawler && PlayerUnitsToPlace.Contains("Brawler");
+}
 
 
-void AMyGameMode::HandleCellClick(FVector2D CellPosition)
+/*void AMyGameMode::HandleCellClick(FVector2D CellPosition)
 {
     if (!GridManager)
     {
@@ -326,7 +361,7 @@ void AMyGameMode::HandleCellClick(FVector2D CellPosition)
     {
         UE_LOG(LogTemp, Warning, TEXT("Invalid cell for placement."));
     }
-}
+}*/
 
 void AMyGameMode::StartPlayerTurn()
 {
@@ -358,7 +393,7 @@ void AMyGameMode::StartPlayerTurn()
             {
                 PlacementWidget->SetGameMode(this);
                 PlacementWidget->AddToViewport();
-                UE_LOG(LogTemp, Warning, TEXT("PlacementWidget created and displayed!"));
+                
             }
             else
             {
@@ -403,7 +438,7 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
     {
         CoinWidget->RemoveFromParent();
         CoinWidget = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("CoinWidget removed and destroyed!"));
+        
     }
 
     if (PlacementWidget)
@@ -418,7 +453,7 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
     {
         CoinTossManager->Destroy();
         CoinTossManager = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("CoinTossManager destroyed!"));
+       
     }
 
     // Reset state variables

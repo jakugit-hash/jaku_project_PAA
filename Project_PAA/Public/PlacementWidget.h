@@ -17,6 +17,16 @@ public:
 	// Function to set the GameMode
 	void SetGameMode(AMyGameMode* InGameMode);
 
+	UFUNCTION(BlueprintCallable)
+	void ClearSelection();
+
+	// Bind the buttons
+	UPROPERTY(meta = (BindWidget))
+	UButton* SniperButton;
+
+	UPROPERTY(meta = (BindWidget))
+	UButton* BrawlerButton;
+	
 protected:
 	// Called when the widget is constructed
 	virtual void NativeConstruct() override;
@@ -28,16 +38,14 @@ protected:
 
 	UFUNCTION()
 	void OnBrawlerButtonClicked();
+	void UpdateButtonStates();
 
 private:
 	// Reference to the GameMode
 	UPROPERTY()
 	AMyGameMode* GameMode;
 
-	// Bind the buttons
-	UPROPERTY(meta = (BindWidget))
-	UButton* SniperButton;
+	
 
-	UPROPERTY(meta = (BindWidget))
-	UButton* BrawlerButton;
+	
 };

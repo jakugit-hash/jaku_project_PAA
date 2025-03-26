@@ -9,6 +9,7 @@ class AGridManager;
 class UPlacementWidget;
 class ACoinTossManager;
 class UCoinWidget;
+class AUnit;
 
 UCLASS()
 class PROJECT_PAA_API AMyGameMode : public AGameModeBase
@@ -43,6 +44,34 @@ public:
     void StartPlayerTurn();
     void HandleCellClick(FVector2D Vector2);
 
+    UFUNCTION(BlueprintCallable)
+    const TArray<FString>& GetPlayerUnitsToPlace() const { return PlayerUnitsToPlace; }
+
+    UFUNCTION(BlueprintCallable)
+    bool CanSelectUnitType(const FString& UnitType) const;
+    // Track whose turn it is to place units
+    bool bIsPlayerTurn;
+
+   
+    // Function to check if a cell is valid for placement
+    bool IsCellValidForPlacement(FVector2D CellPosition);
+
+
+    /*UFUNCTION(BlueprintCallable)
+    bool CanPlaceSniper() const { return !bHasPlacedSniper && PlayerUnitsToPlace.Contains("Sniper"); }
+    
+    UFUNCTION(BlueprintCallable)
+    bool CanPlaceBrawler() const { return !bHasPlacedBrawler && PlayerUnitsToPlace.Contains("Brawler"); }*/
+
+    bool PlaceUnit(const FString& UnitType, const FVector2D& CellPosition);
+    
+    UFUNCTION(BlueprintCallable)
+    bool CanPlaceSniper() const;
+
+        
+    UFUNCTION(BlueprintCallable)
+    bool CanPlaceBrawler() const;
+
 private:
     // Track which units need to be placed
     TArray<FString> PlayerUnitsToPlace;
@@ -74,16 +103,8 @@ private:
     UPROPERTY()
     ACoinTossManager* CoinTossManager;
 
-public:
-    UFUNCTION(BlueprintCallable)
-    const TArray<FString>& GetPlayerUnitsToPlace() const { return PlayerUnitsToPlace; }
 
-    // Track whose turn it is to place units
-    bool bIsPlayerTurn;
-
-    // Function to place a unit on the grid
-    void PlaceUnit(FString UnitType, FVector2D CellPosition);
-
-    // Function to check if a cell is valid for placement
-    bool IsCellValidForPlacement(FVector2D CellPosition);
+    bool bHasPlacedSniper = false;
+    bool bHasPlacedBrawler = false;
+   
 };

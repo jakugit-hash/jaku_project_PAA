@@ -13,13 +13,13 @@ void UCoinWidget::NativeConstruct()
 	Super::NativeConstruct();
 
 	// Log to verify NativeConstruct is called
-	UE_LOG(LogTemp, Warning, TEXT("CoinWidget NativeConstruct called!"));
+	//UE_LOG(LogTemp, Warning, TEXT("CoinWidget NativeConstruct called!"));
 
 	// Bind the CoinButton's OnClicked event
 	if (CoinButton)
 	{
 		CoinButton->OnClicked.AddDynamic(this, &UCoinWidget::OnCoinButtonClicked);
-		UE_LOG(LogTemp, Warning, TEXT("CoinButton bound successfully!"));
+		
 	}
 	else
 	{

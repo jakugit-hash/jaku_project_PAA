@@ -246,7 +246,7 @@ void AGridManager::HandleCellClick(FVector2D CellPosition)
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("Cell clicked at (%f, %f)"), CellPosition.X, CellPosition.Y);
+   
 
     if (IsValid(GameMode))
     {
@@ -302,7 +302,7 @@ bool AGridManager::FindRandomEmptyCell(int32& OutX, int32& OutY)
     {
         OutX = EmptyCells[RandomIndex].X;
         OutY = EmptyCells[RandomIndex].Y;
-        UE_LOG(LogTemp, Warning, TEXT("Found empty cell at (%d, %d)"), OutX, OutY);
+       
         return true;
     }
 

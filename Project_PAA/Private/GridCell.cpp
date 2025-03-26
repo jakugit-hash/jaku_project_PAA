@@ -72,7 +72,7 @@ void AGridCell::BeginPlay()
     {
         // Setup click event using OnComponentClicked
         MeshComponent->OnClicked.AddDynamic(this, &AGridCell::OnCellClicked);
-        UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click event bound to mesh component"), *CellName);
+       
     }
     else
     {
@@ -82,7 +82,7 @@ void AGridCell::BeginPlay()
 
 void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed)
 {
-    UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click detected with button %s"), *CellName, *ButtonPressed.ToString());
+   // UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click detected with button %s"), *CellName, *ButtonPressed.ToString());
 
     if (ClickedComponent)
     {
@@ -94,8 +94,8 @@ void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey Button
     // Notify GameMode
     if (AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Notifying GameMode about click at (%d, %d)"), GridPositionX, GridPositionY);
-        GameMode->HandleCellClick(FVector2D(GridPositionX, GridPositionY));
+       //UE_LOG(LogTemp, Warning, TEXT("Notifying GameMode about click at (%d, %d)"), GridPositionX, GridPositionY);
+        GameMode->HandleUnitPlacement(FVector2D(GridPositionX, GridPositionY));
     }
     else
     {
@@ -178,22 +178,6 @@ bool AGridCell::IsOccupied() const
     return bIsOccupied;
 }
 
-// Handle cell click
-/*void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed)
-{
-    UE_LOG(LogTemp, Warning, TEXT("Cell %s clicked!"), *CellName);
-
-    // Notify the GameMode about the click
-    AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode());
-    if (GameMode)
-    {
-        GameMode->HandleCellClick(FVector2D(GridPositionX, GridPositionY));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
-    }
-}*/
 
 // Set grid position
 void AGridCell::SetGridPosition(int32 X, int32 Y)
