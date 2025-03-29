@@ -2,14 +2,21 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "GlobalEnums.h"
+#include "TurnManager.h"    
+#include "UnitActions.h"
+#include "WBP_ActionWidget.h" 
 #include "MyGameMode.generated.h"
+
 
 // Forward declarations
 class AGridManager;
 class UPlacementWidget;
 class ACoinTossManager;
 class UCoinWidget;
+
 class AUnit;
+class AGridCell;
 
 UCLASS()
 class PROJECT_PAA_API AMyGameMode : public AGameModeBase
@@ -22,8 +29,15 @@ public:
 protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    void LogTurnState();
+    
 
+    void InitGameplayManagers();
+
+    
 public:
+    void HandleActionPhase();
+    void SetupPlayerInput();
     // Function to start the placement phase
     void StartPlacementPhase();
 
@@ -36,54 +50,104 @@ public:
     // Function to set the selected unit type
     void SetSelectedUnitType(const FString& UnitType);
 
+    // Function to start the player's turn
+    void StartPlayerTurn();
+
+    void StartActionPhase(); // Called when placement ends
+
+     // Track whose turn it is to place units
+        bool bIsPlayerTurn;
+        
+        // Function to check if a cell is valid for placement
+        bool IsCellValidForPlacement(FVector2D CellPosition);
+
+ bool PlaceUnit(const FString& UnitType, const FVector2D& CellPosition);
+
+    UFUNCTION()
+    void CheckTurnCompletion();
+    
+    void ShowActionWidget(AUnit* SelectedUnit);
     // Handle coin toss result
     UFUNCTION()
     void HandleCoinTossResult(bool bIsPlayerTurnResult);
+    void HandlePlacementPhase();
 
-    // Function to start the player's turn
-    void StartPlayerTurn();
-    void HandleCellClick(FVector2D Vector2);
-
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, BlueprintPure)
     const TArray<FString>& GetPlayerUnitsToPlace() const { return PlayerUnitsToPlace; }
 
     UFUNCTION(BlueprintCallable)
     bool CanSelectUnitType(const FString& UnitType) const;
-    // Track whose turn it is to place units
-    bool bIsPlayerTurn;
 
-   
-    // Function to check if a cell is valid for placement
-    bool IsCellValidForPlacement(FVector2D CellPosition);
+    UFUNCTION(BlueprintCallable)
+       bool CanPlaceSniper() const;
 
-
-    /*UFUNCTION(BlueprintCallable)
-    bool CanPlaceSniper() const { return !bHasPlacedSniper && PlayerUnitsToPlace.Contains("Sniper"); }
     
-    UFUNCTION(BlueprintCallable)
-    bool CanPlaceBrawler() const { return !bHasPlacedBrawler && PlayerUnitsToPlace.Contains("Brawler"); }*/
+     UFUNCTION(BlueprintCallable)
+        bool CanPlaceBrawler() const;
 
-    bool PlaceUnit(const FString& UnitType, const FVector2D& CellPosition);
-    
-    UFUNCTION(BlueprintCallable)
-    bool CanPlaceSniper() const;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    AUnit* SelectedUnit = nullptr;  // Track currently selected unit
 
-        
-    UFUNCTION(BlueprintCallable)
-    bool CanPlaceBrawler() const;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    EGamePhase CurrentGamePhase = EGamePhase::Placement;
 
-private:
-    // Track which units need to be placed
-    TArray<FString> PlayerUnitsToPlace;
-    TArray<FString> AIUnitsToPlace;
+    UPROPERTY(BlueprintReadOnly)
+    TArray<AUnit*> PlayerUnits;
 
-    // Currently selected unit type for placement
-    FString SelectedUnitType;
+    UPROPERTY(BlueprintReadOnly)
+    TArray<AUnit*> AIUnits;
 
-    // Reference to the GridManager
-    UPROPERTY()
+    UPROPERTY(BlueprintReadOnly, Category = "Gameplay")
     AGridManager* GridManager;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Gameplay")
+    AUnitActions* UnitActions= nullptr;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Gameplay")
+    ATurnManager* TurnManager= nullptr;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    bool bWaitingForPlayerAction = false;
+
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    bool bWaitingForMoveTarget; 
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    bool bWaitingForAttackTarget;
+    
+    UFUNCTION()
+    void HandleMoveAction();
+
+    UFUNCTION()
+    void HandleAttackAction();
+
+    UFUNCTION()
+    void EndPlayerTurn();
+    
+
+    UFUNCTION(BlueprintCallable, Category="UI")
+    void HideActionWidget();
+
+    UFUNCTION()
+    void HandleUnitSelection(AUnit* NewSelection);
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    bool bWaitingForMove = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    bool bWaitingForAttack = false;
+    
+    UFUNCTION()
+    void ClearSelection();
+
+    UPROPERTY()
+    class UWBP_ActionWidget* ActionWidget;
+
+    UPROPERTY(EditDefaultsOnly, Category = "UI")
+    TSubclassOf<class UWBP_ActionWidget> ActionWidgetClass;
+
+    
     // Reference to the PlacementWidget
     UPROPERTY()
     UPlacementWidget* PlacementWidget;
@@ -103,7 +167,26 @@ private:
     UPROPERTY()
     ACoinTossManager* CoinTossManager;
 
+    UFUNCTION(BlueprintCallable)
+    void EndTurn();
 
+    UPROPERTY(Transient)
+    bool bActionPhaseStarted = false;
+
+    
+
+private:
+    
+    
+    // Track which units need to be placed
+    TArray<FString> PlayerUnitsToPlace;
+    TArray<FString> AIUnitsToPlace;
+
+    // Currently selected unit type for placement
+    FString SelectedUnitType;
+
+    
+   
     bool bHasPlacedSniper = false;
     bool bHasPlacedBrawler = false;
    

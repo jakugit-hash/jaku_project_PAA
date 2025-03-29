@@ -7,17 +7,25 @@
 #include "Unit.h"
 #include "CoinWidget.h"
 #include "CoinTossManager.h"
+#include "GlobalEnums.h"
+#include "TurnManager.h"   
+#include "UnitActions.h"
+#include "WBP_ActionWidget.h"
 #include "Kismet/GameplayStatics.h"
 
-AMyGameMode::AMyGameMode()
+AMyGameMode::AMyGameMode(): bWaitingForMoveTarget(false), bWaitingForAttackTarget(false), ActionWidget(nullptr)
 {
     // Set default values
     bIsPlayerTurn = false;
 
-    // Initialize pointers to nullptr
+    //  pointers 
+    CoinWidget = nullptr;
     GridManager = nullptr;
     PlacementWidget = nullptr;
     CoinTossManager = nullptr;
+    UnitActions = nullptr;
+    TurnManager = nullptr;
+    SelectedUnit = nullptr;
 
     // Assign the PlacementWidgetClass in the constructor
     static ConstructorHelpers::FClassFinder<UUserWidget> PlacementWidgetBP(TEXT("/Game/widgets/WBP_PlacementWidget"));
@@ -42,12 +50,24 @@ AMyGameMode::AMyGameMode()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to find CoinWidgetClass!"));
     }
+
+    static ConstructorHelpers::FClassFinder<UUserWidget> WidgetFinder(TEXT("/Game/widgets/WBP_ActionWidget"));
+    if (WidgetFinder.Succeeded())
+    {
+        ActionWidgetClass = WidgetFinder.Class;
+        UE_LOG(LogTemp, Warning, TEXT("Found ActionWidget class: %s"), *GetNameSafe(ActionWidgetClass));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to find ActionWidget class!"));
+    }
 }
 
 void AMyGameMode::BeginPlay()
 {
     Super::BeginPlay();
-
+    InitGameplayManagers();
+    
     // Find and assign the GridManager
     GridManager = Cast<AGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AGridManager::StaticClass()));
     if (!GridManager)
@@ -67,7 +87,8 @@ void AMyGameMode::BeginPlay()
         UE_LOG(LogTemp, Error, TEXT("Failed to spawn CoinTossManager!"));
         return;
     }
-
+    
+    
     // Bind the coin toss result handler
     CoinTossManager->OnCoinTossComplete.AddDynamic(this, &AMyGameMode::HandleCoinTossResult);
 
@@ -97,7 +118,26 @@ void AMyGameMode::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("CoinWidgetClass is null!"));
     }
+
+    TurnManager = GetWorld()->SpawnActor<ATurnManager>();
+    UnitActions = GetWorld()->SpawnActor<AUnitActions>();
+
+    if (!GridManager || !TurnManager || !UnitActions)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CRITICAL: Failed to initialize gameplay systems!"));
+    }
+    /*if (ActionWidgetClass)
+    {
+        ActionWidget = CreateWidget<UWBP_ActionWidget>(GetWorld(), ActionWidgetClass);
+        if (ActionWidget)
+        {
+            ActionWidget->AddToViewport();
+            ActionWidget->SetVisibility(ESlateVisibility::Collapsed);
+            ActionWidget->Setup(this); 
+        }
+    }*/
 }
+
 
 void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
 {
@@ -118,6 +158,59 @@ void AMyGameMode::HandleCoinTossResult(bool bIsPlayerTurnResult)
     StartPlacementPhase();
 }
 
+void AMyGameMode::HandlePlacementPhase()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Handling Placement Phase"));
+    
+    if (PlayerUnitsToPlace.Num() > 0)
+    {
+        if (!PlacementWidget && PlacementWidgetClass)
+        {
+            PlacementWidget = CreateWidget<UPlacementWidget>(GetWorld(), PlacementWidgetClass);
+            if (PlacementWidget)
+            {
+                PlacementWidget->SetGameMode(this);
+                PlacementWidget->AddToViewport();
+                UE_LOG(LogTemp, Warning, TEXT("Placement widget shown"));
+            }
+        }
+    }
+    else
+    {
+        StartActionPhase();
+    }
+}
+
+void AMyGameMode::HandleActionPhase()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Handling Action Phase"));
+    
+    // Auto-select first available unit
+    for (AUnit* Unit : PlayerUnits)
+    {
+        if (!Unit->bHasMovedThisTurn || !Unit->bHasAttackedThisTurn)
+        {
+            SelectedUnit = Unit;
+            ShowActionWidget(Unit);
+            UE_LOG(LogTemp, Warning, TEXT("Auto-selected unit %s for actions"), *Unit->GetName());
+            break;
+        }
+    }
+}
+
+void AMyGameMode::SetupPlayerInput()
+{
+    if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+    {
+        FInputModeGameAndUI InputMode;
+        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        PC->SetInputMode(InputMode);
+        PC->bShowMouseCursor = true;
+        PC->bEnableClickEvents = true;
+        PC->bEnableMouseOverEvents = true;
+        UE_LOG(LogTemp, Warning, TEXT("Player input configured"));
+    }
+}
 void AMyGameMode::StartPlacementPhase()
 {
     UE_LOG(LogTemp, Warning, TEXT("AMyGameMode::StartPlacementPhase called!"));
@@ -191,7 +284,7 @@ void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
     {
         return;
     }
-
+    
     // Player placement
     if (bIsPlayerTurn)
     {
@@ -233,12 +326,7 @@ void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
         AIUnitsToPlace.RemoveAt(0);
     }
 
-    // Original turn logic below
-    if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
-    {
-        StartPlayerTurn();
-        return;
-    }
+   
 
     bIsPlayerTurn = !bIsPlayerTurn;
     
@@ -246,29 +334,65 @@ void AMyGameMode::HandleUnitPlacement(FVector2D CellPosition)
     {
         HandleAIPlacement();
     }
+    // Original turn logic below
+         if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
+         {
+             StartActionPhase();
+         
+         }
+
+    
 }
 
 
 void AMyGameMode::HandleAIPlacement()
 {
-    if (AIUnitsToPlace.Num() == 0) return;
+    if (AIUnitsToPlace.Num() == 0) {
+        // DEBUG
+        UE_LOG(LogTemp, Warning, TEXT("AI has no more units to place"));
+        return;
+    }
 
     // Find random empty cell
     int32 X, Y;
     if (GridManager->FindRandomEmptyCell(X, Y))
     {
-        // Use the first available AI unit
-        FString UnitToPlace = AIUnitsToPlace[0];
-        HandleUnitPlacement(FVector2D(X, Y));
+        FString UnitType = AIUnitsToPlace[0];
+        if (PlaceUnit(UnitType, FVector2D(X, Y)))
+        {
+            AIUnitsToPlace.RemoveAt(0);
+            UE_LOG(LogTemp, Warning, TEXT("AI placed %s at (%d,%d)"), *UnitType, X, Y);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AI couldn't find empty cell!"));
+    }
+
+    // Continue placement or start action phase
+    if (AIUnitsToPlace.Num() == 0 && PlayerUnitsToPlace.Num() == 0)
+    {
+        StartActionPhase();
+    }
+    else
+    {
+        // Switch back to player for next placement
+        bIsPlayerTurn = !bIsPlayerTurn;
     }
 }
 
 bool AMyGameMode::PlaceUnit(const FString& UnitType, const FVector2D& CellPosition)
 {
-    FVector WorldPosition = GridManager->GetCellWorldPosition(CellPosition.X, CellPosition.Y);
-    AUnit* NewUnit = nullptr;
-
    
+    AUnit* NewUnit = nullptr;
+ FVector WorldPosition = GridManager->GetCellWorldPosition(CellPosition.X, CellPosition.Y);
+
+    AGridCell* Cell = GridManager->GetCellAtPosition(CellPosition);
+    if (!Cell || Cell->IsObstacle() || Cell->IsOccupied()) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid placement position!"));
+        return false;
+    }
 
     if (UnitType == TEXT("Sniper"))
     {
@@ -282,13 +406,26 @@ bool AMyGameMode::PlaceUnit(const FString& UnitType, const FVector2D& CellPositi
     if (NewUnit)
     {
         NewUnit->SetGridPosition(CellPosition);
+        NewUnit->SetAsPlayerUnit(bIsPlayerTurn);
         UE_LOG(LogTemp, Warning, TEXT("%s placed at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
-        return true;
+        
+        if (bIsPlayerTurn)
+            PlayerUnits.Add(NewUnit);
+        else
+            AIUnits.Add(NewUnit);
+            
+        return true; // FIX: Consistent return
     }
-    else
+    
+    return false;
+    
+}
+
+void AMyGameMode::CheckTurnCompletion()
+{
+    if (TurnManager)
     {
-        return false;
-        //UE_LOG(LogTemp, Error, TEXT("Failed to spawn %s at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
+        TurnManager->CheckTurnCompletion(this);
     }
 }
 
@@ -309,63 +446,94 @@ bool AMyGameMode::CanPlaceBrawler() const
 }
 
 
-/*void AMyGameMode::HandleCellClick(FVector2D CellPosition)
-{
-    if (!GridManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("GridManager is null!"));
-        return;
-    }
-
-    // Check if it's the player's turn to place units
-    if (!bIsPlayerTurn)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("It's not the player's turn to place units."));
-        return;
-    }
-
-    // Check if the selected cell is valid for placement
-    AGridCell* Cell = GridManager->GetCellAtPosition(CellPosition);
-    if (Cell && !Cell->IsObstacle() && !Cell->IsOccupied())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Cell is valid for placement."));
-
-        // Place the selected unit
-        PlaceUnit(SelectedUnitType, CellPosition);
-
-        // Mark the cell as occupied
-        Cell->SetOccupied(true);
-
-        // Log the placement
-        FString CellName = GridManager->GetCellName(CellPosition.X, CellPosition.Y);
-        UE_LOG(LogTemp, Warning, TEXT("%s placed at position %s"), *SelectedUnitType, *CellName);
-
-        // Remove the placed unit from the list
-        PlayerUnitsToPlace.Remove(SelectedUnitType);
-        UE_LOG(LogTemp, Warning, TEXT("Player placed a %s. Remaining units: %d"), *SelectedUnitType, PlayerUnitsToPlace.Num());
-
-        // Check if all units have been placed
-        if (PlayerUnitsToPlace.Num() == 0 && AIUnitsToPlace.Num() == 0)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("All units placed. Starting the game."));
-            StartPlayerTurn();
-        }
-        else
-        {
-            // Switch turns
+/*
+            // Switch turns- possible option to use if the other doesnt work
             bIsPlayerTurn = false;
             HandleAIPlacement();
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid cell for placement."));
-    }
+   
 }*/
+
+
+
+/*
+void AMyGameMode::PrepareForPlayerActions()
+{
+    // Reset selection states
+    SelectedUnit = nullptr;
+    bWaitingForPlayerAction = true;
+    
+}*/
+
+void AMyGameMode::HandleUnitSelection(AUnit* NewSelection)
+{
+    // Validate selection
+    if (!NewSelection || !NewSelection->bIsPlayerUnit || !bIsPlayerTurn) return;
+
+    if (SelectedUnit)
+    {
+        SelectedUnit->SetSelected(false);
+    }
+    
+    // Set new selection
+    SelectedUnit = NewSelection;
+    SelectedUnit->SetSelected(true);
+    
+    // Show movement range
+    if (GridManager)
+    {
+        GridManager->HighlightMovementRange(
+            SelectedUnit->GetGridPosition(),
+            SelectedUnit->MovementRange,
+            true
+        );
+    }
+    
+    ShowActionWidget(SelectedUnit);
+}
+
+void AMyGameMode::ClearSelection()
+{
+    if (SelectedUnit)
+    {
+        SelectedUnit->SetSelected(false);
+        SelectedUnit = nullptr;
+    }
+    
+    if (GridManager)
+    {
+        GridManager->ClearHighlights();
+    }
+    
+    HideActionWidget();
+}
 
 void AMyGameMode::StartPlayerTurn()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
+    bIsPlayerTurn = true;
+    UE_LOG(LogTemp, Warning, TEXT("=== PLAYER TURN START ==="));
+    bWaitingForPlayerAction = false; // Reset this flag
+
+    for (AUnit* Unit : PlayerUnits)
+    {
+        Unit->bHasMovedThisTurn = false;
+        Unit->bHasAttackedThisTurn = false;
+        UE_LOG(LogTemp, Warning, TEXT("Reset unit %s for new turn"), *Unit->GetName());
+    }
+
+    // Handle different phases
+    if (CurrentGamePhase == EGamePhase::Placement)
+    {
+        HandlePlacementPhase();
+    }
+    else // UnitAction phase
+    {
+        HandleActionPhase();
+    }
+
+    // Common input setup
+    SetupPlayerInput();
+    
+    /*UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
 
     // Check if the player has units left to place
     if (PlayerUnitsToPlace.Num() > 0)
@@ -417,14 +585,231 @@ void AMyGameMode::StartPlayerTurn()
         PC->bShowMouseCursor = true;
         PC->bEnableClickEvents = true;
         PC->bEnableMouseOverEvents = true;
+        UE_LOG(LogTemp, Warning, TEXT("Player controller input enabled"))
+    }
+    // DEBUG: Try forcing widget show
+    if (PlayerUnits.Num() > 0)
+    {
+        ShowActionWidget(PlayerUnits[0]);
+        UE_LOG(LogTemp, Warning, TEXT("DEBUG: Forced widget show on first unit"));
+    }*/
+}
+void AMyGameMode::InitGameplayManagers()
+{
+    TurnManager = GetWorld()->SpawnActor<ATurnManager>();
+    UnitActions = GetWorld()->SpawnActor<AUnitActions>();
+
+    if (!TurnManager)
+    {
+        TurnManager = GetWorld()->SpawnActor<ATurnManager>();
+    }
+    
+    if (!UnitActions)
+    {
+        UnitActions = GetWorld()->SpawnActor<AUnitActions>();
+        UnitActions->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
+    }
+    if (!TurnManager || !UnitActions)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn gameplay managers!"));
     }
 }
 
+
+void AMyGameMode::StartActionPhase()
+{
+
+    if (bActionPhaseStarted) return;
+    
+    bActionPhaseStarted = true;
+    CurrentGamePhase = EGamePhase::UnitAction;
+    UE_LOG(LogTemp, Warning, TEXT("=== ACTION PHASE STARTED ==="));
+
+    // Remove placement widget if exists
+    if (PlacementWidget)
+    {
+        PlacementWidget->RemoveFromParent();
+        PlacementWidget = nullptr;
+    }
+
+    if (ActionWidgetClass)
+    {
+        ActionWidget = CreateWidget<UWBP_ActionWidget>(GetWorld(), ActionWidgetClass);
+        if (ActionWidget)
+        {
+            ActionWidget->AddToViewport();
+            //ActionWidget->SetVisibility(ESlateVisibility::Collapsed);
+            //ActionWidget->Setup(this); 
+        }
+    }
+
+    
+    // DEBUG: Verify units
+    UE_LOG(LogTemp, Warning, TEXT("Player Units: %d, AI Units: %d"), 
+        PlayerUnits.Num(), AIUnits.Num());
+
+    if (bIsPlayerTurn)
+    {
+        if (bIsPlayerTurn)
+        {
+            HandleActionPhase();
+        }
+        /*// Reset unit states for new turn
+        for (AUnit* Unit : PlayerUnits)
+        {
+            Unit->bHasMovedThisTurn = false;
+            Unit->bHasAttackedThisTurn = false;
+        }*/
+        
+        UE_LOG(LogTemp, Warning, TEXT("Player turn started - awaiting input"));
+    }
+    else
+    {
+        // Start AI turn with delay
+        FTimerHandle TimerHandle;
+        GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+        {
+            if (TurnManager) TurnManager->ExecuteAITurn(this);
+        }, 1.0f, false);
+    }
+}
+
+
+
+void AMyGameMode::EndTurn()
+{
+    bIsPlayerTurn = !bIsPlayerTurn;
+    
+    // Reset unit states
+    for (AUnit* Unit : bIsPlayerTurn ? PlayerUnits : AIUnits)
+    {
+        Unit->bHasMovedThisTurn = false;
+        Unit->bHasAttackedThisTurn = false;
+    }
+
+    // Start next turn
+    if (bIsPlayerTurn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player turn started!"));
+    }
+    else if (TurnManager)
+    {
+        FTimerHandle TimerHandle;
+        GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+        {
+            TurnManager->ExecuteAITurn(this);
+        }, 0.5f, false);
+    }
+}
+
+
+void AMyGameMode::LogTurnState()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Turn State - Phase: %d, PlayerTurn: %d"), 
+        (int32)CurrentGamePhase, 
+        bIsPlayerTurn);
+}
+
+void AMyGameMode::ShowActionWidget(AUnit* InSelectedUnit)
+{
+    if (!ActionWidget || !InSelectedUnit) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowActionWidget: Missing ActionWidget or InSelectedUnit"));
+        return;
+    } 
+    // Update the member variable
+    SelectedUnit = InSelectedUnit;
+
+    // Update button states based on unit's available actions
+    ActionWidget->UpdateButtons(
+        !SelectedUnit->bHasMovedThisTurn,
+        !SelectedUnit->bHasAttackedThisTurn
+    );
+
+        ActionWidget->SetVisibility(ESlateVisibility::Visible);
+    
+    
+APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+if (PlayerController)
+{
+    FInputModeGameAndUI InputMode;
+    InputMode.SetWidgetToFocus(ActionWidget->TakeWidget());
+    PlayerController->SetInputMode(InputMode);
+    UE_LOG(LogTemp, Warning, TEXT("Input mode set to GameAndUI"));
+}
+}
+void AMyGameMode::HideActionWidget()
+{
+    if (ActionWidget)
+    {
+        ActionWidget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
+void AMyGameMode::HandleMoveAction()
+{
+    if (!SelectedUnit) return;
+
+    // Set move target mode
+    bWaitingForMoveTarget = true;
+    bWaitingForAttackTarget = false;
+    
+    // Highlight movement range
+    if (GridManager)
+    {
+        GridManager->ClearHighlights();
+        GridManager->HighlightMovementRange(
+            SelectedUnit->GetGridPosition(),
+            SelectedUnit->MovementRange,
+            true
+        );
+    }
+    
+    // Hide widget during targeting
+    HideActionWidget();
+    UE_LOG(LogTemp, Warning, TEXT("Preparing to move unit %s"), *SelectedUnit->GetName());
+}
+
+void AMyGameMode::HandleAttackAction()
+{
+    
+    if (!SelectedUnit) return;
+    
+    bWaitingForMove = false;
+    bWaitingForAttack = true;
+    
+    if (GridManager)
+    {
+        GridManager->ClearHighlights();
+        GridManager->HighlightAttackRange(
+            SelectedUnit->GetGridPosition(),
+            SelectedUnit->AttackRange,
+            true
+        );
+    }
+    HideActionWidget();
+}
+
+void AMyGameMode::EndPlayerTurn()
+{
+    ActionWidget->SetVisibility(ESlateVisibility::Collapsed);
+    bIsPlayerTurn = false;
+    
+    // Start AI turn after delay
+    FTimerHandle TimerHandle;
+    GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+    {
+        TurnManager->ExecuteAITurn(this);
+    }, 1.0f, false);
+}
 
 void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     Super::EndPlay(EndPlayReason);
 
+    if (TurnManager) TurnManager->Destroy();
+    if (UnitActions) UnitActions->Destroy();
+    
     // Destroy GridManager if it exists
     if (GridManager)
     {
@@ -457,10 +842,11 @@ void AMyGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
     }
 
     // Reset state variables
-    PlayerUnitsToPlace.Empty();
-    AIUnitsToPlace.Empty();
+    //PlayerUnitsToPlace.Empty();
+    //AIUnitsToPlace.Empty();
     SelectedUnitType = TEXT("");
     bIsPlayerTurn = false;
 
     UE_LOG(LogTemp, Warning, TEXT("GameMode state reset!"));
 }
+

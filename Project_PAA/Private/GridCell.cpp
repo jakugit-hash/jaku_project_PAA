@@ -1,5 +1,6 @@
 #include "GridCell.h"
 #include "GridManager.h"
+#include "Unit.h"
 #include "Engine/World.h"
 #include "Logging/LogMacros.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -49,7 +50,7 @@ AGridCell::AGridCell()
     }
     if (CellMesh)
     {
-        CellMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        CellMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         CellMesh->SetCollisionObjectType(ECC_WorldStatic);
         CellMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
         CellMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
@@ -160,16 +161,12 @@ bool AGridCell::IsObstacle() const
 // Set occupied status
 void AGridCell::SetOccupied(bool bOccupied)
 {
+    if (bIsOccupied && bOccupied)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Cannot occupy obstacle cell!"));
+        return;
+    }
     bIsOccupied = bOccupied;
-
-    if (bIsOccupied)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Cell %s is now occupied."), *CellName);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Cell %s is now unoccupied."), *CellName);
-    }
 }
 
 // Check if this cell is occupied
@@ -202,4 +199,40 @@ int32 AGridCell::GetGridPositionX() const
 int32 AGridCell::GetGridPositionY() const
 {
     return GridPositionY;
+}
+
+AUnit* AGridCell::GetUnit() const
+{
+    TArray<AActor*> OverlappingActors;
+    GetOverlappingActors(OverlappingActors, AUnit::StaticClass());
+    return (OverlappingActors.Num() > 0) ? Cast<AUnit>(OverlappingActors[0]) : nullptr;
+}
+
+void AGridCell::SetHighlight(bool bHighlight)
+{
+    if (!CellMesh) return;
+
+    // Create or get dynamic material instance
+    UMaterialInstanceDynamic* DynMaterial = CellMesh->CreateAndSetMaterialInstanceDynamic(0);
+    if (DynMaterial)
+    {
+        // Set highlight color (yellow for highlight, white for normal)
+        FLinearColor HighlightColor = bHighlight ? FLinearColor(1.0f, 1.0f, 0.0f, 1.0f) : FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        DynMaterial->SetVectorParameterValue("Color", HighlightColor);
+        
+        // Optional: Add emissive glow when highlighted
+        float EmissiveStrength = bHighlight ? 5.0f : 0.0f;
+        DynMaterial->SetScalarParameterValue("EmissiveStrength", EmissiveStrength);
+    }
+}
+
+void AGridCell::SetHighlightColor(FLinearColor NewColor)
+{
+    if (!CellMesh) return;
+    
+    UMaterialInstanceDynamic* DynMat = CellMesh->CreateAndSetMaterialInstanceDynamic(0);
+    if (DynMat)
+    {
+        DynMat->SetVectorParameterValue("Color", NewColor);
+    }
 }

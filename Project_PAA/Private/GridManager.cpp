@@ -1,6 +1,9 @@
 #include "GridManager.h"
 #include "MyGameMode.h"
 #include "GridCell.h"
+#include "GlobalEnums.h"
+#include "Unit.h"
+
 #include "Kismet/GameplayStatics.h"
 
 // Constructor
@@ -130,7 +133,7 @@ void AGridManager::GenerateObstacles()
 }
 
 // Create the obstacle map
-void AGridManager::CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap)
+void AGridManager::CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap) const
 {
     // Ensure OutObstacleMap has correct dimensions
     OutObstacleMap.SetNum(GridSizeX);
@@ -162,7 +165,7 @@ void AGridManager::CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap)
 }
 
 // Check if all cells are reachable
-bool AGridManager::AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMap)
+bool AGridManager::AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMap) const
 {
     // Initialize visited map
     TArray<TArray<bool>> Visited;
@@ -208,7 +211,7 @@ bool AGridManager::AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMa
 }
 
 // BFS implementation
-void AGridManager::BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY)
+void AGridManager::BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY) const
 {
     TQueue<FIntPoint> Queue;
     Queue.Enqueue(FIntPoint(StartX, StartY));
@@ -238,23 +241,125 @@ void AGridManager::BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<
 }
 
 // Function to handle cell clicks
-void AGridManager::HandleCellClick(FVector2D CellPosition)
+void AGridManager::HandleCellClick(AGridCell* ClickedCell)
 {
-    if (GridCells.Num() == 0)
+    if (!GameMode || !ClickedCell) return;
+
+    // Delegate selection to GameMode
+    if (AUnit* ClickedUnit = ClickedCell->GetUnit())
     {
-        UE_LOG(LogTemp, Error, TEXT("GridCells is empty! Cannot handle cell click."));
+        GameMode->HandleUnitSelection(ClickedUnit);
+    }
+    // Handle movement targeting
+    else if (GameMode->bWaitingForMoveTarget && GameMode->SelectedUnit)
+    {
+        TryMoveSelectedUnit(ClickedCell);
+    }
+    // Attack case
+    /*else if (GameMode->bWaitingForAttack && GameMode->SelectedUnit)
+    {
+        TryAttackSelectedUnit(ClickedCell);
+    }*/
+}
+
+
+void AGridManager::TryMoveSelectedUnit(AGridCell* TargetCell)
+{
+
+    if (!GameMode || !GameMode->SelectedUnit || !TargetCell) return;
+
+    if (GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, TargetCell->GetGridPosition()))
+    {
+        TargetCell->SetHighlightColor(FLinearColor::Blue);
+        GameMode->SelectedUnit->SetSelected(false);
+        GameMode->SelectedUnit = nullptr;
+        GameMode->bWaitingForMove = false;
+        ClearHighlights();
+        GameMode->CheckTurnCompletion();
+    }
+    /*if (!GameMode || !GameMode->SelectedUnit || !TargetCell) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Move failed - invalid references"));
         return;
     }
 
-   
+    AUnit* SelectedUnit = GameMode->SelectedUnit;
+    FVector2D TargetPosition = TargetCell->GetGridPosition();
 
-    if (IsValid(GameMode))
+    // Validate through UnitActions
+    if (GameMode->UnitActions->MoveUnit(SelectedUnit, TargetPosition))
     {
-        GameMode->HandleUnitPlacement(CellPosition);
+        // SUCCESS CASE:
+        // 1. Visual feedback
+        TargetCell->SetHighlightColor(FLinearColor::Blue); // Movement confirmation
+        ClearHighlights();
+
+        // 2. Reset selection states
+        SelectedUnit->HandleSelection(false);
+        GameMode->SelectedUnit = nullptr;
+        GameMode->bWaitingForMoveTarget = false;
+
+        // 3. Check turn completion
+        GameMode->CheckTurnCompletion();
+        UE_LOG(LogTemp, Warning, TEXT("Move successful to %s"), *TargetPosition.ToString());
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("GameMode is null!"));
+        // FAIL CASE:
+        // 1. Re-enable selection
+        GameMode->ShowActionWidget(SelectedUnit);
+        UE_LOG(LogTemp, Warning, TEXT("Invalid move position"));
+    }
+    FVector2D TargetPosition(TargetCell->GetGridPositionX(), TargetCell->GetGridPositionY());
+    
+    // Validate movement
+    bool bCanMove = !TargetCell->IsObstacle() && 
+                   !TargetCell->IsOccupied() &&
+                   (FMath::Abs(TargetPosition.X - GameMode->SelectedUnit->GetGridPosition().X) + 
+                    FMath::Abs(TargetPosition.Y - GameMode->SelectedUnit->GetGridPosition().Y)) <= GameMode->SelectedUnit->MovementRange;
+
+    if (bCanMove)
+    {
+        // Execute move
+        GameMode->SelectedUnit->SetGridPosition(TargetPosition);
+        GameMode->SelectedUnit->bHasMovedThisTurn = true;
+        ClearHighlights();
+        UE_LOG(LogTemp, Warning, TEXT("Unit MOVED to [%d,%d]"),
+            TargetCell->GetGridPositionX(),
+            TargetCell->GetGridPositionY());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid move! Obstacle:%d Occupied:%d"),
+            TargetCell->IsObstacle(),
+            TargetCell->IsOccupied());
+    }*/
+}
+void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
+{
+    if (!GameMode || !GameMode->UnitActions) return;
+
+    // Case 1: Unit Selection
+    if (AUnit* ClickedUnit = ClickedCell->GetUnit())
+    {
+        if (ClickedUnit->bIsPlayerUnit && GameMode->bIsPlayerTurn)
+        {
+            GameMode->SelectedUnit = ClickedUnit;
+            HighlightMovementRange(ClickedUnit->GetGridPosition(), ClickedUnit->MovementRange, true);
+            GameMode->ShowActionWidget(ClickedUnit);
+        }
+        return;
+    }
+
+    // Case 2: Movement Execution
+    if (GameMode->SelectedUnit && GameMode->bWaitingForMoveTarget)
+    {
+        if (IsCellFree(ClickedCell->GetGridPosition()))
+        {
+            GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, ClickedCell->GetGridPosition());
+            ClearHighlights();
+            GameMode->bWaitingForMoveTarget = false;
+        }
     }
 }
 
@@ -337,6 +442,133 @@ bool AGridManager::IsCellFree(FVector2D CellPosition) const
     return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
 
+void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
+{
+    ClearHighlights();
+    
+    for (AGridCell* Cell : GridCells)
+    {
+        if (Cell)
+        {
+            FVector2D CellPos = Cell->GetGridPosition();
+            int32 Distance = FMath::Abs(CellPos.X - Center.X) + 
+                           FMath::Abs(CellPos.Y - Center.Y);
+            
+            if (Distance <= Range && IsPathClear(Center, CellPos))
+            {
+                Cell->SetHighlight(bHighlight);
+                Cell->SetHighlightColor(FLinearColor(0, 1, 1, 0.5f)); // Cyan highlight
+            }
+        }
+    }
+}
+
+void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight)
+{
+    for (AGridCell* Cell : GridCells)
+    {
+        if (Cell)
+        {
+            float Distance = FVector2D::Distance(Cell->GetGridPosition(), Center);
+            Cell->SetHighlight(bHighlight && Distance <= Range);
+        }
+    }
+}
+
+
+
+bool AGridManager::IsPathClear(FVector2D Start, FVector2D End) const
+{
+    // Early exit if straight path exists (optimization)
+    bool bStraightClear = true;
+    int32 Steps = FMath::Max(FMath::Abs(End.X - Start.X), FMath::Abs(End.Y - Start.Y));
+    for (int32 i = 1; i < Steps && bStraightClear; i++)
+    {
+        FVector2D Point = FMath::Lerp(Start, End, float(i)/Steps);
+        if (AGridCell* Cell = GetCellAtPosition(Point))
+        {
+            bStraightClear &= !Cell->IsObstacle();
+        }
+    }
+    if (bStraightClear) return true;
+
+    // Fall back to A* if straight path blocked
+    TArray<TArray<bool>> ObstacleMap;
+    CreateObstacleMap(ObstacleMap); // Reuse your existing method
+    return !AStarPathfind(Start, End, ObstacleMap).IsEmpty();
+}
+
+
+
+TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, const TArray<TArray<bool>>& ObstacleMap) const
+{
+    TArray<FVector2D> Path;
+    TArray<TTuple<float, FVector2D, TArray<FVector2D>>> OpenSet;
+    TSet<FVector2D> ClosedSet;
+
+    // Initialize with start node
+    TArray<FVector2D> InitialPath;
+    InitialPath.Add(Start);
+    OpenSet.Add(MakeTuple(HeuristicCost(Start, End), Start, InitialPath));
+
+    while (OpenSet.Num() > 0)
+    {
+        // Get node with lowest cost
+        OpenSet.Sort([](const auto& A, const auto& B) { return A.Get<0>() < B.Get<0>(); });
+        auto CurrentNode = OpenSet[0];
+        OpenSet.RemoveAt(0);
+
+        FVector2D CurrentPos = CurrentNode.Get<1>();
+        TArray<FVector2D> CurrentPath = CurrentNode.Get<2>();
+
+        if (CurrentPos == End)
+        {
+            Path = CurrentPath;
+            break;
+        }
+
+        ClosedSet.Add(CurrentPos);
+
+        // Check neighbors
+        TArray<FVector2D> Directions = { FVector2D(1,0), FVector2D(-1,0), FVector2D(0,1), FVector2D(0,-1) };
+        for (const FVector2D& Dir : Directions)
+        {
+            FVector2D NeighborPos = CurrentPos + Dir;
+
+            // Validate neighbor
+            if (NeighborPos.X < 0 || NeighborPos.X >= GridSizeX || 
+                NeighborPos.Y < 0 || NeighborPos.Y >= GridSizeY) continue;
+            if (ObstacleMap[NeighborPos.X][NeighborPos.Y]) continue;
+            if (ClosedSet.Contains(NeighborPos)) continue;
+
+            // Calculate new path
+            TArray<FVector2D> NewPath = CurrentPath;
+            NewPath.Add(NeighborPos);
+            float NewCost = CurrentPath.Num() + HeuristicCost(NeighborPos, End);
+
+            // Add to open set
+            OpenSet.Add(MakeTuple(NewCost, NeighborPos, NewPath));
+        }
+    }
+    return Path;
+}
+
+int32 AGridManager::HeuristicCost(FVector2D A, FVector2D B) const
+
+{
+    // Manhattan distance
+    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+}
+
+void AGridManager::ClearHighlights()
+{
+    for (AGridCell* Cell : GridCells)
+    {
+        if (Cell) Cell->SetHighlight(false);
+    }
+}
+
+
 // Called when the actor is being destroyed
 void AGridManager::DestroyGrid()
 {
@@ -353,4 +585,9 @@ void AGridManager::DestroyGrid()
     GridCells.Empty();
 
     UE_LOG(LogTemp, Warning, TEXT("GridManager cleaned up!"));
+}
+
+FVector2D AGridCell::GetGridPosition() const 
+{ 
+    return FVector2D(GridPositionX, GridPositionY); 
 }

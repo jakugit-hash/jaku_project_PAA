@@ -7,6 +7,7 @@
 
 // Forward declarations
 class AGridManager;
+class AUnit;
 
 UCLASS()
 class PROJECT_PAA_API AGridCell : public AActor
@@ -18,6 +19,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	
 
 public:
 	// Cell Name (e.g., "A1", "B5")
@@ -35,7 +37,25 @@ public:
 	// Is this cell occupied by a unit?
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	bool bIsOccupied = false;
+	
+// Handle cell click
+	UFUNCTION()
+	void OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed);
 
+	UFUNCTION(BlueprintCallable)
+	AUnit* GetUnit() const;
+
+	UFUNCTION(BlueprintCallable)
+	void SetHighlight(bool bHighlight);
+
+	UFUNCTION(BlueprintCallable)
+	void SetHighlightColor(FLinearColor NewColor);
+	
+	/*{
+		TArray<AActor*> OverlappingActors;
+		GetOverlappingActors(OverlappingActors, AUnit::StaticClass());
+		return (OverlappingActors.Num() > 0) ? Cast<AUnit>(OverlappingActors[0]) : nullptr;
+	}*/
 	// Grid position of the cell
 	int32 GridPositionX;
 	int32 GridPositionY;
@@ -53,9 +73,7 @@ public:
 	int32 GetGridPositionX() const;
 	int32 GetGridPositionY() const;
 
-	// Handle cell click
-	UFUNCTION()
-	void OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed);
+	FVector2D GetGridPosition() const;
 
 private:
 	// Default and obstacle materials

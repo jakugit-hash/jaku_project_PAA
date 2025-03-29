@@ -2,7 +2,8 @@
 
 #include "Unit.h"
 #include "GridManager.h" 
-#include "GridCell.h"    
+#include "GridCell.h"
+#include "MyGameMode.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
 
@@ -49,37 +50,31 @@ AGridManager* AUnit::GetGridManager() const
     return GridManager;
 }
 
-// Set the unit's grid position
 void AUnit::SetGridPosition(FVector2D NewPosition)
 {
     AGridManager* GridManager = GetGridManager();
-    if (!GridManager)
-    {
-        UE_LOG(LogTemp, Error, TEXT("GridManager is not found!"));
-        return;
-    }
+    if (!GridManager ) return;
 
-    // Mark the current cell as unoccupied
-    AGridCell* CurrentCell = GridManager->GetCellAtPosition(GridPosition);
-    if (CurrentCell)
-    {
-        CurrentCell->SetOccupied(false);
-    }
+            // Mark current cell as unoccupied
+            if (AGridCell* CurrentCell = GridManager->GetCellAtPosition(GridPosition))
+            {
+                CurrentCell->SetOccupied(false);
+            }
 
-    // Update the grid position
-    GridPosition = NewPosition;
+            // Update position
+            GridPosition = NewPosition;
 
-    // Mark the new cell as occupied
-    AGridCell* NewCell = GridManager->GetCellAtPosition(NewPosition);
-    if (NewCell)
-    {
-        NewCell->SetOccupied(true);
-    }
+            // Mark new cell as occupied
+            if (AGridCell* NewCell = GridManager->GetCellAtPosition(NewPosition))
+            {
+                NewCell->SetOccupied(true);
+                SetActorLocation(GridManager->GetCellWorldPosition(NewPosition.X, NewPosition.Y));
+            }
+        }
 
-    // Update the unit's world position
-    FVector WorldPosition = GridManager->GetCellWorldPosition(NewPosition.X, NewPosition.Y);
-    SetActorLocation(WorldPosition);
-}
+FVector2D AUnit::GetGridPosition() const
+{ return GridPosition; }
+
 
 // Move the unit to a new cell
 void AUnit::MoveToCell(FVector2D NewPosition)
@@ -110,4 +105,59 @@ void AUnit::MoveToCell(FVector2D NewPosition)
     {
         UE_LOG(LogTemp, Warning, TEXT("Target cell is occupied or blocked!"));
     }
+}
+
+void AUnit::SetSelected(bool bSelected)
+{
+    bIsSelected = bSelected;
+    
+    // Visual feedback
+    if (UnitMesh)
+    {
+        UnitMesh->SetRenderCustomDepth(bSelected);
+        UnitMesh->SetCustomDepthStencilValue(bSelected ? 2 : 0);
+        
+        // Pulse effect when selected
+        if (bSelected)
+        {
+            UnitMesh->SetScalarParameterValueOnMaterials("Pulse", 1.0f);
+        }
+    }
+}
+
+void AUnit::OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed)
+{
+    if (AMyGameMode* GM = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
+    {
+        GM->HandleUnitSelection(this);
+    }
+}
+
+
+void AUnit::DestroyUnit()
+{
+    // Notify grid cell
+    if (AGridManager* GridManager = GetGridManager())
+    {
+        if (AGridCell* Cell = GridManager->GetCellAtPosition(GridPosition))
+        {
+            Cell->SetOccupied(false);
+        }
+    }
+
+    // Remove from GameMode's unit arrays
+    if (AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
+    {
+        if (bIsPlayerUnit)
+        {
+            GameMode->PlayerUnits.Remove(this);
+        }
+        else
+        {
+            GameMode->AIUnits.Remove(this);
+        }
+    }
+
+    // Destroy actor
+    Destroy();
 }
