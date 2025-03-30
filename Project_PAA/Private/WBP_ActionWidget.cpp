@@ -4,14 +4,24 @@
 
 void UWBP_ActionWidget::Setup(AMyGameMode* GameMode)
 {
-	GameModeRef = GameMode;
-    
-	
-	if (MoveButton) MoveButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnMoveClicked);
-	if (AttackButton) AttackButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnAttackClicked);
-	if (EndTurnButton) EndTurnButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnEndTurnClicked);
+    GameModeRef = GameMode;
 
-	UE_LOG(LogTemp, Warning, TEXT("Widget buttons bound successfully!"));
+    if (MoveButton)
+    {
+        MoveButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnMoveClicked);
+    }
+
+    if (AttackButton)
+    {
+        AttackButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnAttackClicked);
+    }
+
+    if (EndTurnButton)
+    {
+        EndTurnButton->OnClicked.AddUniqueDynamic(this, &UWBP_ActionWidget::OnEndTurnClicked);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Widget buttons bound successfully!"));
 }
 
 void UWBP_ActionWidget::OnMoveClicked()

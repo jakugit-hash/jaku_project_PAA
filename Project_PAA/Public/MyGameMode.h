@@ -33,6 +33,7 @@ protected:
     
 
     void InitGameplayManagers();
+    EUnitActionState CurrentActionState;
 
     
 public:
@@ -115,6 +116,12 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     bool bWaitingForAttackTarget;
+
+ 
+    UPROPERTY()
+    bool bMovementRangeVisible = false;
+    bool bIsAttackHighlighted = false;
+    
     
     UFUNCTION()
     void HandleMoveAction();

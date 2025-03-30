@@ -13,7 +13,11 @@
 #include "WBP_ActionWidget.h"
 #include "Kismet/GameplayStatics.h"
 
-AMyGameMode::AMyGameMode(): bWaitingForMoveTarget(false), bWaitingForAttackTarget(false), ActionWidget(nullptr)
+
+AMyGameMode::AMyGameMode(): bWaitingForMoveTarget(false),
+      bWaitingForAttackTarget(false),
+      ActionWidget(nullptr),
+      CurrentActionState(EUnitActionState::None)
 {
     // Set default values
     bIsPlayerTurn = false;
@@ -466,46 +470,53 @@ void AMyGameMode::PrepareForPlayerActions()
 
 void AMyGameMode::HandleUnitSelection(AUnit* NewSelection)
 {
-    // Validate selection
     if (!NewSelection || !NewSelection->bIsPlayerUnit || !bIsPlayerTurn) return;
 
-    if (SelectedUnit)
+    if (SelectedUnit == NewSelection)
     {
-        SelectedUnit->SetSelected(false);
+        // GridManager->ClearHighlights();
+        // SelectedUnit->SetSelected(false);
+        // SelectedUnit = nullptr;
+        // //GridManager->ClearHighlights();
+        bMovementRangeVisible = false;
+        HandleMoveAction();
+        HideActionWidget();
+        return;
     }
-    
-    // Set new selection
+
+    // cambio unità
+    if (SelectedUnit) SelectedUnit->SetSelected(false);
     SelectedUnit = NewSelection;
     SelectedUnit->SetSelected(true);
-    
-    // Show movement range
-    if (GridManager)
-    {
-        GridManager->HighlightMovementRange(
-            SelectedUnit->GetGridPosition(),
-            SelectedUnit->MovementRange,
-            true
-        );
-    }
-    
+
+    GridManager->ClearHighlights(); // rimuovi vecchio highlight
+    bMovementRangeVisible = false;
+
     ShowActionWidget(SelectedUnit);
 }
 
+
+
 void AMyGameMode::ClearSelection()
 {
-    if (SelectedUnit)
-    {
-        SelectedUnit->SetSelected(false);
-        SelectedUnit = nullptr;
-    }
-    
+   
+
+    bMovementRangeVisible = false;
+    bIsAttackHighlighted = false;
+
     if (GridManager)
     {
         GridManager->ClearHighlights();
     }
     
+ if (SelectedUnit)
+    {
+        SelectedUnit->SetSelected(false);
+        SelectedUnit = nullptr;
+    }
     HideActionWidget();
 }
+
 
 void AMyGameMode::StartPlayerTurn()
 {
@@ -533,66 +544,7 @@ void AMyGameMode::StartPlayerTurn()
     // Common input setup
     SetupPlayerInput();
     
-    /*UE_LOG(LogTemp, Warning, TEXT("Player's Turn!"));
-
-    // Check if the player has units left to place
-    if (PlayerUnitsToPlace.Num() > 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Player has units to place. Waiting for selection..."));
-
-        // Enable input for unit selection
-        APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-        if (PlayerController)
-        {
-            PlayerController->SetInputMode(FInputModeGameAndUI());
-            PlayerController->bShowMouseCursor = true;
-            UE_LOG(LogTemp, Warning, TEXT("Player input enabled!"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("PlayerController is null!"));
-        }
-
-        // Display the PlacementWidget for unit selection
-        if (PlacementWidgetClass)
-        {
-            PlacementWidget = CreateWidget<UPlacementWidget>(GetWorld(), PlacementWidgetClass);
-            if (PlacementWidget)
-            {
-                PlacementWidget->SetGameMode(this);
-                PlacementWidget->AddToViewport();
-                
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("Failed to create PlacementWidget!"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("PlacementWidgetClass is null!"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Player has no units left to place. Switching to AI turn."));
-        bIsPlayerTurn = false;
-        HandleAIPlacement();
-    }
-
-    if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-    {
-        PC->bShowMouseCursor = true;
-        PC->bEnableClickEvents = true;
-        PC->bEnableMouseOverEvents = true;
-        UE_LOG(LogTemp, Warning, TEXT("Player controller input enabled"))
-    }
-    // DEBUG: Try forcing widget show
-    if (PlayerUnits.Num() > 0)
-    {
-        ShowActionWidget(PlayerUnits[0]);
-        UE_LOG(LogTemp, Warning, TEXT("DEBUG: Forced widget show on first unit"));
-    }*/
+   
 }
 void AMyGameMode::InitGameplayManagers()
 {
@@ -618,54 +570,41 @@ void AMyGameMode::InitGameplayManagers()
 
 void AMyGameMode::StartActionPhase()
 {
-
     if (bActionPhaseStarted) return;
-    
+
     bActionPhaseStarted = true;
     CurrentGamePhase = EGamePhase::UnitAction;
     UE_LOG(LogTemp, Warning, TEXT("=== ACTION PHASE STARTED ==="));
 
-    // Remove placement widget if exists
+    // Rimuovi widget di piazzamento se presente
     if (PlacementWidget)
     {
         PlacementWidget->RemoveFromParent();
         PlacementWidget = nullptr;
     }
 
+    // CREA E CONFIGURA L'ACTION WIDGET
     if (ActionWidgetClass)
     {
         ActionWidget = CreateWidget<UWBP_ActionWidget>(GetWorld(), ActionWidgetClass);
         if (ActionWidget)
         {
             ActionWidget->AddToViewport();
-            //ActionWidget->SetVisibility(ESlateVisibility::Collapsed);
-            //ActionWidget->Setup(this); 
+            ActionWidget->Setup(this); 
+            UE_LOG(LogTemp, Warning, TEXT("ActionWidget creato e Setup eseguito"));
         }
     }
 
-    
-    // DEBUG: Verify units
-    UE_LOG(LogTemp, Warning, TEXT("Player Units: %d, AI Units: %d"), 
-        PlayerUnits.Num(), AIUnits.Num());
+    UE_LOG(LogTemp, Warning, TEXT("Player Units: %d, AI Units: %d"), PlayerUnits.Num(), AIUnits.Num());
 
     if (bIsPlayerTurn)
     {
-        if (bIsPlayerTurn)
-        {
-            HandleActionPhase();
-        }
-        /*// Reset unit states for new turn
-        for (AUnit* Unit : PlayerUnits)
-        {
-            Unit->bHasMovedThisTurn = false;
-            Unit->bHasAttackedThisTurn = false;
-        }*/
-        
+        HandleActionPhase();
         UE_LOG(LogTemp, Warning, TEXT("Player turn started - awaiting input"));
     }
     else
     {
-        // Start AI turn with delay
+        // Turno AI
         FTimerHandle TimerHandle;
         GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
         {
@@ -748,14 +687,23 @@ void AMyGameMode::HideActionWidget()
 
 void AMyGameMode::HandleMoveAction()
 {
-    if (!SelectedUnit) return;
+    if (!SelectedUnit || !GridManager) return;
 
-    // Set move target mode
-    bWaitingForMoveTarget = true;
-    bWaitingForAttackTarget = false;
-    
-    // Highlight movement range
-    if (GridManager)
+
+    // toggle comportamento
+    if (bMovementRangeVisible)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HideActionWidget: Movement Range"));
+        
+        GridManager->ClearHighlights();
+        //GridManager->HighlightMovementRange(
+        //    SelectedUnit->GetGridPosition(),
+        //    SelectedUnit->MovementRange,
+        //    false
+        //);
+        bMovementRangeVisible = false;
+    }
+    else
     {
         GridManager->ClearHighlights();
         GridManager->HighlightMovementRange(
@@ -763,32 +711,38 @@ void AMyGameMode::HandleMoveAction()
             SelectedUnit->MovementRange,
             true
         );
+        bMovementRangeVisible = true;
     }
-    
-    // Hide widget during targeting
+
     HideActionWidget();
-    UE_LOG(LogTemp, Warning, TEXT("Preparing to move unit %s"), *SelectedUnit->GetName());
 }
+
+
+
 
 void AMyGameMode::HandleAttackAction()
 {
-    
-    if (!SelectedUnit) return;
-    
-    bWaitingForMove = false;
-    bWaitingForAttack = true;
-    
-    if (GridManager)
+    if (!SelectedUnit || !GridManager) return;
+
+    // cancella eventuale highlight movimento
+    if (bMovementRangeVisible)
     {
         GridManager->ClearHighlights();
-        GridManager->HighlightAttackRange(
-            SelectedUnit->GetGridPosition(),
-            SelectedUnit->AttackRange,
-            true
-        );
+        bMovementRangeVisible = false;
     }
+
+    CurrentActionState = EUnitActionState::Attacking;
+
+    GridManager->HighlightAttackRange(
+        SelectedUnit->GetGridPosition(),
+        SelectedUnit->AttackRange,
+        true
+    );
+
     HideActionWidget();
 }
+
+
 
 void AMyGameMode::EndPlayerTurn()
 {

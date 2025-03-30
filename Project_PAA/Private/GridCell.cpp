@@ -49,6 +49,12 @@ AGridCell::AGridCell()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to load obstacle material for GridCell!"));
     }
+
+    // materiale blu per il movimento
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> MoveMatFinder(
+        TEXT("/Game/StarterContent/Materials/M_Metal_Gold.M_Metal_Gold"));
+    HighlightMoveMaterial = MoveMatFinder.Object;
+
     if (CellMesh)
     {
         CellMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -211,20 +217,15 @@ AUnit* AGridCell::GetUnit() const
 
 void AGridCell::SetHighlight(bool bHighlight)
 {
-    if (!CellMesh) return;
+    if (IsObstacle()) return;
 
-    // Create or get dynamic material instance
-    UMaterialInstanceDynamic* DynMaterial = CellMesh->CreateAndSetMaterialInstanceDynamic(0);
-    if (DynMaterial)
+    if (CellMesh && DefaultMaterial && HighlightMoveMaterial)
     {
-        // Set highlight color (yellow for highlight, white for normal)
-        FLinearColor HighlightColor = bHighlight ? FLinearColor(1.0f, 1.0f, 0.0f, 1.0f) : FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        DynMaterial->SetVectorParameterValue("Color", HighlightColor);
+        CellMesh->SetMaterial(0, bHighlight ? DefaultMaterial : HighlightMoveMaterial);
         
-        // Optional: Add emissive glow when highlighted
-        float EmissiveStrength = bHighlight ? 5.0f : 0.0f;
-        DynMaterial->SetScalarParameterValue("EmissiveStrength", EmissiveStrength);
     }
+
+    
 }
 
 void AGridCell::SetHighlightColor(FLinearColor NewColor)
@@ -237,3 +238,4 @@ void AGridCell::SetHighlightColor(FLinearColor NewColor)
         DynMat->SetVectorParameterValue("Color", NewColor);
     }
 }
+

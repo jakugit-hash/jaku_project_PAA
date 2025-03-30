@@ -83,4 +83,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Grid")
 	UMaterialInterface* ObstacleMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Grid")
+	UMaterialInterface* HighlightMoveMaterial;
+
+	
 };

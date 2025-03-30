@@ -75,6 +75,7 @@ public:
 
 	// Movement
 	void MoveToCell(FVector2D NewPosition);
+	UFUNCTION()
 	void OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed);
 	void DestroyUnit();
 

@@ -62,9 +62,7 @@ public:
     void TryMoveSelectedUnit(AGridCell* TargetCell);
     
     void HandlePlayerAction(AGridCell* ClickedCell);
-
-    void HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight);
-    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight);
+    
     
     bool IsPathClear(FVector2D Start, FVector2D End) const;
     void ClearHighlights();
@@ -87,6 +85,29 @@ void CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap) const;
     void BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY) const;
 
      TArray<FVector2D> AStarPathfind(FVector2D Start, FVector2D End, const TArray<TArray<bool>>& ObstacleMap) const;
+
+
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
+    UMaterialInterface* DefaultTileMaterial;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
+    UMaterialInterface* HighlightMoveMaterial;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
+    UMaterialInterface* HighlightAttackMaterial;
+
+    /*bool bIsMovementRangeVisible;
+    bool bIsHighlightActive;
+    AUnit* LastHighlightedUnit;*/
+    void LoadMaterials();
+    
+    UPROPERTY()
+    AUnit* CurrentlyHighlightedUnit = nullptr;
+    void HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight);
+    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight);
+    UFUNCTION(BlueprintCallable, Category = "Grid")
+    void HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAttackRange = false);
 private:
     // Flag to track if the grid has been created
     bool bGridCreated;

@@ -33,6 +33,17 @@ AUnit::AUnit()
 void AUnit::BeginPlay()
 {
     Super::BeginPlay();
+    UnitMesh->OnClicked.AddDynamic(this, &AUnit::OnClicked);
+    if (UnitMesh)
+    {
+        UnitMesh->OnClicked.RemoveDynamic(this, &AUnit::OnClicked); // evita doppio bind
+        UnitMesh->OnClicked.AddDynamic(this, &AUnit::OnClicked);
+        UE_LOG(LogTemp, Warning, TEXT("Unit OnClicked bind effettuato con successo"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("UnitMesh is null in BeginPlay!"));
+    }
 }
 
 // Get the GridManager instance
@@ -127,6 +138,7 @@ void AUnit::SetSelected(bool bSelected)
 
 void AUnit::OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed)
 {
+    UE_LOG(LogTemp, Error, TEXT("suca tommaso"));
     if (AMyGameMode* GM = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
     {
         GM->HandleUnitSelection(this);

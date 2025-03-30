@@ -11,6 +11,34 @@ AGridManager::AGridManager()
 {
     PrimaryActorTick.bCanEverTick = false;
     bGridCreated = false;
+    // materiale di default per la griglia
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> DefaultMatFinder(
+        TEXT("/Game/StarterContent/Materials/M_Water_Lake.M_Water_Lake"));
+    DefaultTileMaterial = DefaultMatFinder.Object;
+    
+    // materiale blu per il movimento
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> MoveMatFinder(
+        TEXT("/Game/StarterContent/Materials/M_Metal_Gold.M_Metal_Gold"));
+    HighlightMoveMaterial = MoveMatFinder.Object;
+
+    // materiale rosso per l'attacco
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> AttackMatFinder(
+        TEXT("/Game/StarterContent/Materials/M_Brick_Clay_New.M_Brick_Clay_New"));
+    HighlightAttackMaterial = AttackMatFinder.Object;
+    // Configurazione aggiuntiva per differenziare i materiali
+    if (HighlightMoveMaterial)
+    {
+        UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(HighlightMoveMaterial, this);
+        DynMat->SetVectorParameterValue("Color", FLinearColor(0.1f, 0.3f, 1.0f, 0.5f)); // Blu
+        HighlightMoveMaterial = DynMat;
+    }
+
+    if (HighlightAttackMaterial)
+    {
+        UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(HighlightAttackMaterial, this);
+        DynMat->SetVectorParameterValue("Color", FLinearColor(1.0f, 0.1f, 0.1f, 0.7f)); // Rosso
+        HighlightAttackMaterial = DynMat;
+    }
 }
 
 // Called when the game starts or when spawned
@@ -30,6 +58,10 @@ void AGridManager::BeginPlay()
 
     // Generate obstacles
     GenerateObstacles();
+
+    if (!DefaultTileMaterial) UE_LOG(LogTemp, Error, TEXT("DefaultTileMaterial non caricato!"));
+    if (!HighlightMoveMaterial) UE_LOG(LogTemp, Error, TEXT("HighlightMoveMaterial non caricato!"));
+    if (!HighlightAttackMaterial) UE_LOG(LogTemp, Error, TEXT("HighlightAttackMaterial non caricato!"));
 }
 
 // Create the grid
@@ -245,16 +277,33 @@ void AGridManager::HandleCellClick(AGridCell* ClickedCell)
 {
     if (!GameMode || !ClickedCell) return;
 
-    // Delegate selection to GameMode
+    // Se la cella ha un'unità
     if (AUnit* ClickedUnit = ClickedCell->GetUnit())
     {
+        // Se è la stessa unità già selezionata e l'highlight è attivo
+        if (GameMode->SelectedUnit == ClickedUnit && CurrentlyHighlightedUnit == ClickedUnit)
+        {
+            // Disattiva completamente l'highlight
+            ClearHighlights();
+            GameMode->SelectedUnit->SetSelected(false);
+            GameMode->SelectedUnit = nullptr;
+            GameMode->HideActionWidget();
+            CurrentlyHighlightedUnit = nullptr;
+            return;
+        }
+        
+        // Altrimenti gestisci nuova selezione
         GameMode->HandleUnitSelection(ClickedUnit);
+        CurrentlyHighlightedUnit = ClickedUnit;
     }
-    // Handle movement targeting
+    // Gestione del movimento
     else if (GameMode->bWaitingForMoveTarget && GameMode->SelectedUnit)
     {
         TryMoveSelectedUnit(ClickedCell);
+        CurrentlyHighlightedUnit = nullptr;
     }
+
+
     // Attack case
     /*else if (GameMode->bWaitingForAttack && GameMode->SelectedUnit)
     {
@@ -265,7 +314,6 @@ void AGridManager::HandleCellClick(AGridCell* ClickedCell)
 
 void AGridManager::TryMoveSelectedUnit(AGridCell* TargetCell)
 {
-
     if (!GameMode || !GameMode->SelectedUnit || !TargetCell) return;
 
     if (GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, TargetCell->GetGridPosition()))
@@ -344,6 +392,17 @@ void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
     {
         if (ClickedUnit->bIsPlayerUnit && GameMode->bIsPlayerTurn)
         {
+            // se la stessa unità viene cliccata di nuovo, fai toggle e deseleziona
+            if (GameMode->SelectedUnit == ClickedUnit)
+            {
+                ClearHighlights();
+                GameMode->SelectedUnit = nullptr;
+                GameMode->HideActionWidget(); // se hai una funzione del genere
+                return;
+            }
+
+            // altrimenti cambia unità selezionata (mutuamente esclusivo)
+            ClearHighlights();
             GameMode->SelectedUnit = ClickedUnit;
             HighlightMovementRange(ClickedUnit->GetGridPosition(), ClickedUnit->MovementRange, true);
             GameMode->ShowActionWidget(ClickedUnit);
@@ -442,39 +501,97 @@ bool AGridManager::IsCellFree(FVector2D CellPosition) const
     return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
 
+
+void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
+{
+    // Clear ALL highlights first (no conditions)
+    for (AGridCell* Cell : GridCells)
+    {
+        if (Cell && Cell->CellMesh)
+        {
+            ClearHighlights();
+        }
+    }
+
+    // If we're turning OFF highlights, just exit now
+    if (!bHighlight)
+    {
+        CurrentlyHighlightedUnit = nullptr;
+        return;
+    }
+
+    // Highlight new cells
+    for (AGridCell* Cell : GridCells)
+    {
+        if (!Cell) continue;
+
+        FVector2D CellPos = Cell->GetGridPosition();
+        int32 Distance = FMath::Abs(CellPos.X - Center.X) + FMath::Abs(CellPos.Y - Center.Y);
+
+        if (Distance <= Range)
+        {
+            Cell->CellMesh->SetMaterial(0, HighlightMoveMaterial);
+        }
+    }
+
+    CurrentlyHighlightedUnit = GameMode->SelectedUnit;
+}
+/*
 void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
 {
     ClearHighlights();
-    
+    // se non dobbiamo evidenziare, cancelliamo e basta
+    if (!bHighlight)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DAMNNNNN"));    
+        CurrentlyHighlightedUnit = nullptr;
+        return;
+    }
+
+    // rimuovi highlight precedente
+    CurrentlyHighlightedUnit = GameMode->SelectedUnit;
+
     for (AGridCell* Cell : GridCells)
     {
-        if (Cell)
+        if (!Cell) continue;
+
+        FVector2D CellPos = Cell->GetGridPosition();
+        int32 Distance = FMath::Abs(CellPos.X - Center.X) + FMath::Abs(CellPos.Y - Center.Y);
+
+        if (Distance <= Range && IsPathClear(Center, CellPos))
         {
-            FVector2D CellPos = Cell->GetGridPosition();
-            int32 Distance = FMath::Abs(CellPos.X - Center.X) + 
-                           FMath::Abs(CellPos.Y - Center.Y);
-            
-            if (Distance <= Range && IsPathClear(Center, CellPos))
-            {
-                Cell->SetHighlight(bHighlight);
-                Cell->SetHighlightColor(FLinearColor(0, 1, 1, 0.5f)); // Cyan highlight
-            }
+            HighlightCell(CellPos.X, CellPos.Y, true, false); // false = non è range attacco
         }
     }
-}
+
+}*/
+
 
 void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight)
 {
+    if (GameMode->SelectedUnit == CurrentlyHighlightedUnit)
+    {
+        ClearHighlights();
+        CurrentlyHighlightedUnit = nullptr;
+        return;
+    }
+
+    ClearHighlights();
+    CurrentlyHighlightedUnit = GameMode->SelectedUnit;
+
     for (AGridCell* Cell : GridCells)
     {
-        if (Cell)
+        if (!Cell) continue;
+
+        FVector2D CellPos = Cell->GetGridPosition();
+        int32 Distance = FMath::Abs(CellPos.X - Center.X) + FMath::Abs(CellPos.Y - Center.Y);
+
+        if (Distance <= Range)
         {
-            float Distance = FVector2D::Distance(Cell->GetGridPosition(), Center);
-            Cell->SetHighlight(bHighlight && Distance <= Range);
+            HighlightCell(CellPos.X, CellPos.Y, bHighlight, true);
         }
     }
 }
-
 
 
 bool AGridManager::IsPathClear(FVector2D Start, FVector2D End) const
@@ -553,6 +670,24 @@ TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, co
     return Path;
 }
 
+void AGridManager::HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAttackRange)
+{
+    AGridCell* Cell = GetCellAtPosition(FVector2D(X, Y));
+    if (!Cell || !Cell->CellMesh) return;
+
+    if (bHighlight)
+    {
+       // UMaterialInterface* MaterialToUse = bIsAttackRange ? HighlightAttackMaterial : HighlightMoveMaterial;
+        //Cell->CellMesh->SetMaterial(0, MaterialToUse);
+        Cell->SetHighlight(true);
+    }
+    else
+    {
+        // non serve riassegnare il materiale di default perché è già quello visibile di base
+        // quindi non facciamo nulla quicle
+    }
+}
+
 int32 AGridManager::HeuristicCost(FVector2D A, FVector2D B) const
 
 {
@@ -564,8 +699,12 @@ void AGridManager::ClearHighlights()
 {
     for (AGridCell* Cell : GridCells)
     {
-        if (Cell) Cell->SetHighlight(false);
+        if (!Cell || !Cell->CellMesh) continue;
+        
+        Cell->SetHighlight(false);
     }
+    UE_LOG(LogTemp, Display, TEXT("ClearHighlights VEDERE SE VALE "));
+    CurrentlyHighlightedUnit = nullptr;
 }
 
 
