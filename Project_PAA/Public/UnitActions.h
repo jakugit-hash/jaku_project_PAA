@@ -5,6 +5,7 @@
 
 class AUnit;
 class AGridManager;
+class ATurnManager;
 
 UCLASS()
 class PROJECT_PAA_API AUnitActions : public AActor

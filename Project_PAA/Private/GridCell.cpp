@@ -1,6 +1,7 @@
 #include "GridCell.h"
 #include "GridManager.h"
 #include "Unit.h"
+#include "MyGameMode.h"
 #include "Engine/World.h"
 #include "Logging/LogMacros.h"
 #include "Materials/MaterialInstanceDynamic.h"

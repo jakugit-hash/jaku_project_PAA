@@ -4,13 +4,12 @@
 #include "GameFramework/Actor.h"
 #include "GlobalEnums.h"
 #include "GridCell.h"
-#include "MyGameMode.h"
 #include "GridManager.generated.h"
 
 // Forward declaration
-//class AUnit;
-class AGridCell;
+class AUnit;
 class AMyGameMode;
+class AUnitActions;
 
 UCLASS()
 class PROJECT_PAA_API AGridManager : public AActor

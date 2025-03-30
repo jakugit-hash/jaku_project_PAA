@@ -8,6 +8,7 @@
 // Forward declarations
 class AGridManager;
 class AUnit;
+class AMyGameMode;
 
 UCLASS()
 class PROJECT_PAA_API AGridCell : public AActor

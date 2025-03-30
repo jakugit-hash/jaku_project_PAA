@@ -3,20 +3,20 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GlobalEnums.h"
-#include "TurnManager.h"    
-#include "UnitActions.h"
-#include "WBP_ActionWidget.h" 
 #include "MyGameMode.generated.h"
 
 
 // Forward declarations
 class AGridManager;
+class ATurnManager;
+class AUnitActions;
+class AUnit;
+class AGridCell;
 class UPlacementWidget;
 class ACoinTossManager;
 class UCoinWidget;
+class UWBP_ActionWidget;
 
-class AUnit;
-class AGridCell;
 
 UCLASS()
 class PROJECT_PAA_API AMyGameMode : public AGameModeBase

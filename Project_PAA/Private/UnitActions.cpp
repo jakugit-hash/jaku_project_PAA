@@ -1,6 +1,8 @@
 #include "UnitActions.h"
 #include "Unit.h"
 #include "GridManager.h"
+#include "TurnManager.h" 
+#include "MyGameMode.h"
 #include "Kismet/GameplayStatics.h"
 
 AUnitActions::AUnitActions()
