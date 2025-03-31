@@ -90,26 +90,30 @@ void AGridCell::BeginPlay()
 
 void AGridCell::OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed)
 {
-   // UE_LOG(LogTemp, Warning, TEXT("GridCell %s: Click detected with button %s"), *CellName, *ButtonPressed.ToString());
+    UE_LOG(LogTemp, Warning, TEXT("ClickedComponent: %s"), *ClickedComponent->GetName());
+    UE_LOG(LogTemp, Warning, TEXT("Component Collision: %d"), ClickedComponent->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
 
-    if (ClickedComponent)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ClickedComponent: %s"), *ClickedComponent->GetName());
-        UE_LOG(LogTemp, Warning, TEXT("Component Collision: %d"), 
-            ClickedComponent->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
-    }
-
-    // Notify GameMode
-    if (AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
-    {
-       //UE_LOG(LogTemp, Warning, TEXT("Notifying GameMode about click at (%d, %d)"), GridPositionX, GridPositionY);
-        GameMode->HandleUnitPlacement(FVector2D(GridPositionX, GridPositionY));
-    }
-    else
+    AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode());
+    if (!GameMode)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to get GameMode!"));
+        return;
+    }
+
+    if (GameMode->CurrentGamePhase == EGamePhase::Placement)
+    {
+        GameMode->HandleUnitPlacement(FVector2D(GridPositionX, GridPositionY));
+    }
+    else if (GameMode->CurrentGamePhase == EGamePhase::UnitAction)
+    {
+        AGridManager* GridManager = GameMode->GridManager;
+        if (GridManager)
+        {
+            GridManager->HandleCellClick(this);
+        }
     }
 }
+
 
 // Set obstacle status
 void AGridCell::SetObstacle(bool bObstacle)

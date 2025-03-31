@@ -702,6 +702,7 @@ void AMyGameMode::HandleMoveAction()
         //    false
         //);
         bMovementRangeVisible = false;
+        bWaitingForMoveTarget = false;
     }
     else
     {
@@ -712,6 +713,7 @@ void AMyGameMode::HandleMoveAction()
             true
         );
         bMovementRangeVisible = true;
+        bWaitingForMoveTarget = true; 
     }
 
     HideActionWidget();
