@@ -183,7 +183,8 @@ bool ATurnManager::FindMovePositionForAI(AUnit* AIUnit, FVector2D& OutBestPositi
 	TArray<FVector2D> Path = GridManager->AStarPathfind(
 		AIUnit->GetGridPosition(),
 		NearestEnemy->GetGridPosition(),
-		TempObstacleMap
+		AIUnit->MovementRange
+	
 	);
 
 	// Find farthest reachable point along path

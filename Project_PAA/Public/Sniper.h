@@ -4,15 +4,22 @@
 #include "Unit.h"
 #include "Sniper.generated.h"
 
-/**
- * Sniper unit class.a
- */
 UCLASS()
 class PROJECT_PAA_API ASniper : public AUnit
 {
 	GENERATED_BODY()
-
+    
 public:
-	// Sets default values for this unit's properties
 	ASniper();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Materials")
+	UMaterialInterface* PlayerMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Materials")
+	UMaterialInterface* AIMaterial;
+
+	virtual void SetAsPlayerUnit(bool bIsPlayer) override;
+
+protected:
+	virtual void BeginPlay() override;
 };

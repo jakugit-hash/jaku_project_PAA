@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,7 +5,6 @@
 #include "GlobalEnums.h"
 #include "Unit.generated.h"
 
-// Forward declaration
 class AGridCell;
 class AGridManager;
 
@@ -22,8 +20,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-
-	// Unit properties
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit")
 	int32 Health;
 
@@ -39,53 +35,47 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit")
 	int32 MaxDamage;
 
-	// Static Mesh Component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Unit")
 	UStaticMeshComponent* UnitMesh;
-	
-	UFUNCTION(BlueprintCallable)
-	void SetSelected(bool bSelected);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	bool bHasMovedThisTurn = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	bool bIsPlayerUnit = true; // Set to false for AI units
+	bool bIsPlayerUnit = true;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	bool bHasAttackedThisTurn = false;
-    
-	// Call this when creating units in PlaceUnit():
-	void SetAsPlayerUnit(bool bIsPlayer) { bIsPlayerUnit = bIsPlayer; }
-
-	UFUNCTION(BlueprintCallable, Category = "Unit")
-	bool CanAttack() const 
-	{
-		return Health > 0 && 
-			  !bHasAttackedThisTurn && 
-			  (bIsPlayerUnit || !GetWorld()->GetFirstPlayerController());
-	}
-
-	
-	UFUNCTION(BlueprintCallable)
-	void SetGridPosition(FVector2D NewPosition);
-	
-	UFUNCTION(BlueprintCallable)
-	FVector2D GetGridPosition() const;
-
-	// Movement
-	void MoveToCell(FVector2D NewPosition);
-	UFUNCTION()
-	void OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed);
-	void DestroyUnit();
 
 	UPROPERTY(VisibleAnywhere)
 	bool bIsSelected = false;
+
+	UFUNCTION(BlueprintCallable)
+	void SetSelected(bool bSelected);
+
+	UFUNCTION(BlueprintCallable)
+	void SetGridPosition(FVector2D NewPosition);
+
+	UFUNCTION(BlueprintCallable)
+	FVector2D GetGridPosition() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Unit")
+	virtual void SetAsPlayerUnit(bool bIsPlayer);
+
+	UFUNCTION(BlueprintCallable, Category = "Unit")
+	bool CanAttack() const;
+
+	void MoveToCell(FVector2D NewPosition);
+	void DestroyUnit();
+
+	UFUNCTION()
+	void OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed);
+
+protected:
+	UFUNCTION(BlueprintCallable, Category = "Unit")
+	void ApplyTeamMaterials(bool bIsPlayer);
+
 private:
-	FVector2D GridPosition; // Current position on the grid
-
-	// Helper function to get the GridManager
+	FVector2D GridPosition;
 	AGridManager* GetGridManager() const;
-
-	
 };

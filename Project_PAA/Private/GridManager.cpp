@@ -4,6 +4,10 @@
 #include "GlobalEnums.h"
 #include "Unit.h"
 #include "UnitActions.h"
+#include "Containers/Queue.h"            // per TQueue
+#include "Containers/Array.h"
+#include "Containers/Set.h"
+#include "Templates/Greater.h"           // per TGreater<>
 #include "Kismet/GameplayStatics.h"
 
 // Constructor
@@ -316,73 +320,32 @@ void AGridManager::TryMoveSelectedUnit(AGridCell* TargetCell)
 {
     if (!GameMode || !GameMode->SelectedUnit || !TargetCell) return;
 
-    if (GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, TargetCell->GetGridPosition()))
+    // calcola il path con A*
+    TArray<FVector2D> Path = AStarPathfind(
+        GameMode->SelectedUnit->GetGridPosition(),
+        TargetCell->GetGridPosition(),
+        GameMode->SelectedUnit->MovementRange
+    );
+
+    // verifica che il path sia valido
+    if (Path.Num() > 0 && Path.Last() == TargetCell->GetGridPosition())
     {
-        TargetCell->SetHighlightColor(FLinearColor::Blue);
-        GameMode->SelectedUnit->SetSelected(false);
-        GameMode->SelectedUnit = nullptr;
-        GameMode->bWaitingForMove = false;
-        ClearHighlights();
-        GameMode->CheckTurnCompletion();
-    }
-    /*if (!GameMode || !GameMode->SelectedUnit || !TargetCell) 
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Move failed - invalid references"));
-        return;
-    }
-
-    AUnit* SelectedUnit = GameMode->SelectedUnit;
-    FVector2D TargetPosition = TargetCell->GetGridPosition();
-
-    // Validate through UnitActions
-    if (GameMode->UnitActions->MoveUnit(SelectedUnit, TargetPosition))
-    {
-        // SUCCESS CASE:
-        // 1. Visual feedback
-        TargetCell->SetHighlightColor(FLinearColor::Blue); // Movement confirmation
-        ClearHighlights();
-
-        // 2. Reset selection states
-        SelectedUnit->HandleSelection(false);
-        GameMode->SelectedUnit = nullptr;
-        GameMode->bWaitingForMoveTarget = false;
-
-        // 3. Check turn completion
-        GameMode->CheckTurnCompletion();
-        UE_LOG(LogTemp, Warning, TEXT("Move successful to %s"), *TargetPosition.ToString());
+        if (GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, TargetCell->GetGridPosition()))
+        {
+            TargetCell->SetHighlightColor(FLinearColor::Blue);
+            GameMode->SelectedUnit->SetSelected(false);
+            GameMode->SelectedUnit = nullptr;
+            GameMode->bWaitingForMoveTarget = false;
+            ClearHighlights();
+            GameMode->CheckTurnCompletion();
+        }
     }
     else
     {
-        // FAIL CASE:
-        // 1. Re-enable selection
-        GameMode->ShowActionWidget(SelectedUnit);
-        UE_LOG(LogTemp, Warning, TEXT("Invalid move position"));
+        UE_LOG(LogTemp, Warning, TEXT("No valid path to target cell!"));
     }
-    FVector2D TargetPosition(TargetCell->GetGridPositionX(), TargetCell->GetGridPositionY());
-    
-    // Validate movement
-    bool bCanMove = !TargetCell->IsObstacle() && 
-                   !TargetCell->IsOccupied() &&
-                   (FMath::Abs(TargetPosition.X - GameMode->SelectedUnit->GetGridPosition().X) + 
-                    FMath::Abs(TargetPosition.Y - GameMode->SelectedUnit->GetGridPosition().Y)) <= GameMode->SelectedUnit->MovementRange;
-
-    if (bCanMove)
-    {
-        // Execute move
-        GameMode->SelectedUnit->SetGridPosition(TargetPosition);
-        GameMode->SelectedUnit->bHasMovedThisTurn = true;
-        ClearHighlights();
-        UE_LOG(LogTemp, Warning, TEXT("Unit MOVED to [%d,%d]"),
-            TargetCell->GetGridPositionX(),
-            TargetCell->GetGridPositionY());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid move! Obstacle:%d Occupied:%d"),
-            TargetCell->IsObstacle(),
-            TargetCell->IsOccupied());
-    }*/
 }
+
 void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
 {
     if (!GameMode || !GameMode->UnitActions) return;
@@ -392,16 +355,14 @@ void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
     {
         if (ClickedUnit->bIsPlayerUnit && GameMode->bIsPlayerTurn)
         {
-            // se la stessa unità viene cliccata di nuovo, fai toggle e deseleziona
             if (GameMode->SelectedUnit == ClickedUnit)
             {
                 ClearHighlights();
                 GameMode->SelectedUnit = nullptr;
-                GameMode->HideActionWidget(); // se hai una funzione del genere
+                GameMode->HideActionWidget();
                 return;
             }
 
-            // altrimenti cambia unità selezionata (mutuamente esclusivo)
             ClearHighlights();
             GameMode->SelectedUnit = ClickedUnit;
             HighlightMovementRange(ClickedUnit->GetGridPosition(), ClickedUnit->MovementRange, true);
@@ -413,7 +374,8 @@ void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
     // Case 2: Movement Execution
     if (GameMode->SelectedUnit && GameMode->bWaitingForMoveTarget)
     {
-        if (IsCellFree(ClickedCell->GetGridPosition()))
+        // Use IsCellBlocked with the moving unit
+        if (!IsCellBlocked(ClickedCell->GetGridPosition().X, ClickedCell->GetGridPosition().Y))
         {
             GameMode->UnitActions->MoveUnit(GameMode->SelectedUnit, ClickedCell->GetGridPosition());
             ClearHighlights();
@@ -421,7 +383,6 @@ void AGridManager::HandlePlayerAction(AGridCell* ClickedCell)
         }
     }
 }
-
 // Function to get cell name
 FString AGridManager::GetCellName(int32 X, int32 Y)
 {
@@ -495,25 +456,56 @@ AGridCell* AGridManager::GetCellAtPosition(FVector2D Position) const
 }
 
 // Function to check if a cell is free
+/*
 bool AGridManager::IsCellFree(FVector2D CellPosition) const
 {
     AGridCell* Cell = GetCellAtPosition(CellPosition);
     return Cell && !Cell->IsObstacle() && !Cell->IsOccupied();
 }
+*/
 
+bool AGridManager::IsCellFree(FVector2D CellPosition) const
+{
+    return !IsCellBlocked(CellPosition.X, CellPosition.Y);
+}
 
 void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
 {
-    // Clear ALL highlights first (no conditions)
+    ClearHighlights();
+    if (!bHighlight || !GameMode || !GameMode->SelectedUnit) return;
+
+    CurrentlyHighlightedUnit = GameMode->SelectedUnit;
+
+    for (AGridCell* Cell : GridCells)
+    {
+        if (!Cell || Cell->IsObstacle() || Cell->IsOccupied()) continue;
+
+        FVector2D CellPos = Cell->GetGridPosition();
+        if (CellPos == Center) continue;
+
+        // calcola il path usando A*
+        TArray<FVector2D> Path = AStarPathfind(Center, CellPos, Range);
+
+        // se la cella è raggiungibile e nel range
+        if (Path.Num() > 0 && Path.Last() == CellPos)
+        {
+            HighlightCell(CellPos.X, CellPos.Y, true, false);
+        }
+    }
+}
+
+
+/*void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
+{
+    // Clear ALL highlights first
     for (AGridCell* Cell : GridCells)
     {
         if (Cell && Cell->CellMesh)
         {
-            ClearHighlights();
+            Cell->SetHighlight(false);
         }
     }
 
-    // If we're turning OFF highlights, just exit now
     if (!bHighlight)
     {
         CurrentlyHighlightedUnit = nullptr;
@@ -530,12 +522,16 @@ void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bH
 
         if (Distance <= Range)
         {
-            Cell->CellMesh->SetMaterial(0, HighlightMoveMaterial);
+            // Use IsCellBlocked with the currently selected unit
+            if (!IsCellBlocked(CellPos.X, CellPos.Y, CurrentlyHighlightedUnit))
+            {
+                HighlightCell(CellPos.X, CellPos.Y, true, false);
+            }
         }
     }
 
     CurrentlyHighlightedUnit = GameMode->SelectedUnit;
-}
+}*/
 /*
 void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
 {
@@ -567,17 +563,15 @@ void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bH
 }*/
 
 
-void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight)
+void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack)
 {
-    if (GameMode->SelectedUnit == CurrentlyHighlightedUnit)
+    ClearHighlights();
+    
+    if (!bHighlight) 
     {
-        ClearHighlights();
         CurrentlyHighlightedUnit = nullptr;
         return;
     }
-
-    ClearHighlights();
-    CurrentlyHighlightedUnit = GameMode->SelectedUnit;
 
     for (AGridCell* Cell : GridCells)
     {
@@ -588,36 +582,29 @@ void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHig
 
         if (Distance <= Range)
         {
-            HighlightCell(CellPos.X, CellPos.Y, bHighlight, true);
+            // For ranged attacks, ignore obstacles
+            if (bIsRangedAttack)
+            {
+                HighlightCell(CellPos.X, CellPos.Y, true, true);
+            }
+            // For melee attacks, check if path is clear
+            else 
+            {
+                TArray<FVector2D> Path = AStarPathfind(Center, CellPos, 1);
+                if (Path.Num() > 0)
+                {
+                    HighlightCell(CellPos.X, CellPos.Y, true, true);
+                }
+            }
         }
     }
 }
 
 
-bool AGridManager::IsPathClear(FVector2D Start, FVector2D End) const
-{
-    // Early exit if straight path exists (optimization)
-    bool bStraightClear = true;
-    int32 Steps = FMath::Max(FMath::Abs(End.X - Start.X), FMath::Abs(End.Y - Start.Y));
-    for (int32 i = 1; i < Steps && bStraightClear; i++)
-    {
-        FVector2D Point = FMath::Lerp(Start, End, float(i)/Steps);
-        if (AGridCell* Cell = GetCellAtPosition(Point))
-        {
-            bStraightClear &= !Cell->IsObstacle();
-        }
-    }
-    if (bStraightClear) return true;
-
-    // Fall back to A* if straight path blocked
-    TArray<TArray<bool>> ObstacleMap;
-    CreateObstacleMap(ObstacleMap); // Reuse your existing method
-    return !AStarPathfind(Start, End, ObstacleMap).IsEmpty();
-}
 
 
 
-TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, const TArray<TArray<bool>>& ObstacleMap) const
+/*TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, const TArray<TArray<bool>>& ObstacleMap) const
 {
     TArray<FVector2D> Path;
     TArray<TTuple<float, FVector2D, TArray<FVector2D>>> OpenSet;
@@ -668,7 +655,179 @@ TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, co
         }
     }
     return Path;
+}*/
+
+TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, int32 MaxRange) const
+{
+    struct Node {
+        FVector2D Position;
+        int32 G; // Cost from start
+        int32 H; // Heuristic to end
+        int32 F() const { return G + H; }
+        TArray<FVector2D> Path;
+
+        Node(FVector2D Pos, int32 GVal, int32 HVal, const TArray<FVector2D>& PrevPath)
+            : Position(Pos), G(GVal), H(HVal), Path(PrevPath) 
+        {
+            Path.Add(Pos);
+        }
+    };
+
+    TArray<FVector2D> Result;
+    TArray<Node> Open;
+    TSet<FVector2D> Closed;
+
+    Open.Add(Node(Start, 0, HeuristicCost(Start, End), {}));
+
+    while (Open.Num() > 0)
+    {
+        // Sort by lowest F cost
+        Open.Sort([](const Node& A, const Node& B) {
+            return A.F() < B.F();
+        });
+
+        Node Current = Open[0];
+        Open.RemoveAt(0);
+
+        if (Current.Position == End)
+        {
+            return Current.Path;
+        }
+
+        Closed.Add(Current.Position);
+
+        // 4-direction movement only (no diagonals)
+        TArray<FVector2D> Directions = {
+            FVector2D(1,0), FVector2D(-1,0),
+            FVector2D(0,1), FVector2D(0,-1)
+        };
+
+        for (const FVector2D& Dir : Directions)
+        {
+            FVector2D Neighbor = Current.Position + Dir;
+
+            // Check bounds
+            if (!IsValidCell(Neighbor)) continue;
+            
+            // Check if already evaluated
+            if (Closed.Contains(Neighbor)) continue;
+
+            // Check if cell is blocked (ignoring the moving unit)
+            if (IsCellBlocked(Neighbor.X, Neighbor.Y)) continue;
+
+            int32 NewG = Current.G + 1;
+            if (NewG > MaxRange) continue;
+
+            // Check if this path is better
+            bool bFoundBetter = false;
+            for (Node& OpenNode : Open)
+            {
+                if (OpenNode.Position == Neighbor && OpenNode.G <= NewG)
+                {
+                    bFoundBetter = true;
+                    break;
+                }
+            }
+
+            if (!bFoundBetter)
+            {
+                int32 H = HeuristicCost(Neighbor, End);
+                Open.Add(Node(Neighbor, NewG, H, Current.Path));
+            }
+        }
+    }
+
+    return {}; // No path found
 }
+
+
+
+/*bool AGridManager::IsPathClear(FVector2D Start, FVector2D End) const
+{
+    // First check straight line path
+    bool bStraightClear = true;
+    int32 Steps = FMath::Max(FMath::Abs(End.X - Start.X), FMath::Abs(End.Y - Start.Y));
+    for (int32 i = 1; i < Steps && bStraightClear; i++)
+    {
+        FVector2D Point = FMath::Lerp(Start, End, float(i)/Steps);
+        if (IsCellBlocked(Point.X, Point.Y))
+        {
+            bStraightClear = false;
+        }
+    }
+    if (bStraightClear) return true;
+
+    // Fall back to A* if straight path is blocked
+    if (!GameMode || !GameMode->SelectedUnit) return false;
+
+    TArray<FVector2D> Path = AStarPathfind(Start, End, 
+        GameMode->SelectedUnit->MovementRange);
+
+    return Path.Num() > 0;
+}*/
+
+TArray<FVector2D> AGridManager::FindPath(FVector2D Start, FVector2D End,  AUnit* MovingUnit)
+{
+    TArray<FVector2D> Path;
+
+    if (Start == End) return Path;
+
+    TArray<TTuple<float, FVector2D, TArray<FVector2D>>> OpenSet;
+    TSet<FVector2D> ClosedSet;
+
+    TArray<FVector2D> InitialPath;
+    InitialPath.Add(Start);
+    OpenSet.Add(MakeTuple(HeuristicCost(Start, End), Start, InitialPath));
+
+    while (OpenSet.Num() > 0)
+    {
+        OpenSet.Sort([](const auto& A, const auto& B) { return A.Get<0>() < B.Get<0>(); });
+        auto Current = OpenSet[0];
+        OpenSet.RemoveAt(0);
+
+        FVector2D CurrentPos = Current.Get<1>();
+        TArray<FVector2D> CurrentPath = Current.Get<2>();
+
+        if (CurrentPos == End)
+        {
+            Path = CurrentPath;
+            break;
+        }
+
+        ClosedSet.Add(CurrentPos);
+
+        // 4-direction movement
+        TArray<FVector2D> Directions = { 
+            FVector2D(1,0), FVector2D(-1,0), 
+            FVector2D(0,1), FVector2D(0,-1) 
+        };
+        
+        for (FVector2D Dir : Directions)
+        {
+            FVector2D NextPos = CurrentPos + Dir;
+
+            // Bounds checking
+            if (NextPos.X < 0 || NextPos.X >= GridSizeX || 
+                NextPos.Y < 0 || NextPos.Y >= GridSizeY)
+                continue;
+
+            if (ClosedSet.Contains(NextPos)) continue;
+
+            // Use IsCellBlocked (no specific unit to ignore here)
+            if (IsCellBlocked(NextPos.X, NextPos.Y)) 
+                continue;
+
+            TArray<FVector2D> NewPath = CurrentPath;
+            NewPath.Add(NextPos);
+            float NewCost = CurrentPath.Num() + HeuristicCost(NextPos, End);
+
+            OpenSet.Add(MakeTuple(NewCost, NextPos, NewPath));
+        }
+    }
+
+    return Path;
+}
+
 
 void AGridManager::HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAttackRange)
 {
@@ -688,12 +847,16 @@ void AGridManager::HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAtta
     }
 }
 
-int32 AGridManager::HeuristicCost(FVector2D A, FVector2D B) const
-
+bool AGridManager::IsValidCell(FVector2D Pos) const
 {
-    // Manhattan distance
-    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+    return Pos.X >= 0 && Pos.X < GridSizeX && Pos.Y >= 0 && Pos.Y < GridSizeY;
 }
+
+int32 AGridManager::HeuristicCost(FVector2D A, FVector2D B) const
+{
+    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y); // distanza Manhattan
+}
+
 
 void AGridManager::ClearHighlights()
 {
@@ -730,3 +893,38 @@ FVector2D AGridCell::GetGridPosition() const
 { 
     return FVector2D(GridPositionX, GridPositionY); 
 }
+
+bool AGridManager::IsCellBlocked(int32 X, int32 Y) const
+{
+    AGridCell* Cell = GetCellAtPosition(FVector2D(X, Y));
+    if (!Cell) return true;
+
+    if (Cell->IsObstacle()) return true;
+
+    // ogni cella occupata è bloccante
+    if (Cell->IsOccupied())
+    {
+        return true;
+    }
+
+    return false;
+}
+
+    /*if (Cell->IsObstacle())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cell at (%d,%d) is obstacle - blocked"), X, Y);
+        return true;
+    }
+
+    if (Cell->IsOccupied())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cell at (%d,%d) is occupied - blocked"), X, Y);
+        return true;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("Cell at (%d,%d) is free"), X, Y);
+    return false;*/
+    
+    // Now uses the proper occupation check
+   // return Cell->IsObstacle() || Cell->GetUnit();
+

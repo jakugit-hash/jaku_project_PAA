@@ -20,25 +20,25 @@ bool AUnitActions::MoveUnit(AUnit* Unit, FVector2D TargetPosition)
 {
 	if (!Unit || Unit->bHasMovedThisTurn) return false;
 
-	AGridCell* TargetCell = GetGridManager()->GetCellAtPosition(TargetPosition);
-	if (!TargetCell || TargetCell->IsObstacle() || TargetCell->IsOccupied())
-		return false;
-
-	
-	const AGridManager* GridManager = GetGridManager();
+	AGridManager* GridManager = GetGridManager();
 	if (!GridManager) return false;
 
-	// Validate distance (Manhattan)
-	int32 Distance = FMath::Abs(TargetPosition.X - Unit->GetGridPosition().X) + 
-					FMath::Abs(TargetPosition.Y - Unit->GetGridPosition().Y);
-	if (Distance > Unit->MovementRange) return false;
-	
+	// Calcola il path usando A*
+	TArray<FVector2D> Path = GridManager->AStarPathfind(Unit->GetGridPosition(), TargetPosition, Unit->MovementRange);
 
-	// Execute move
-	Unit->SetGridPosition(TargetPosition);
+	// Se il path è vuoto o non arriva alla destinazione esatta, blocca il movimento
+	if (Path.Num() == 0 || Path.Last() != TargetPosition)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No valid path to the target!"));
+		return false;
+	}
+
+	// Esegui il movimento
+	Unit->MoveToCell(TargetPosition); // aggiorna posizione, occupazione e posizione visiva
 	Unit->bHasMovedThisTurn = true;
 	Unit->bIsSelected = false;
 
+	// Controlla se il turno è finito
 	if (AMyGameMode* GameMode = Cast<AMyGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		if (ATurnManager* TurnManager = GameMode->TurnManager)
@@ -48,6 +48,7 @@ bool AUnitActions::MoveUnit(AUnit* Unit, FVector2D TargetPosition)
 	}
 	return true;
 }
+
 
 bool AUnitActions::IsValidMove(AUnit* Unit, FVector2D TargetPosition)
 {

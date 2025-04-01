@@ -44,9 +44,6 @@ public:
 	void OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed);
 
 	UFUNCTION(BlueprintCallable)
-	AUnit* GetUnit() const;
-
-	UFUNCTION(BlueprintCallable)
 	void SetHighlight(bool bHighlight);
 
 	UFUNCTION(BlueprintCallable)
@@ -76,6 +73,12 @@ public:
 
 	FVector2D GetGridPosition() const;
 
+	UFUNCTION(BlueprintCallable)
+	void SetUnit(AUnit* Unit);
+
+	UFUNCTION(BlueprintCallable)
+	AUnit* GetUnit() const;
+
 private:
 	// Default and obstacle materials
 	UPROPERTY(EditDefaultsOnly, Category = "Grid")
@@ -86,6 +89,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Grid")
 	UMaterialInterface* HighlightMoveMaterial;
+
+	UPROPERTY()
+	AUnit* CurrentUnit = nullptr;
 
 	
 };

@@ -212,11 +212,39 @@ int32 AGridCell::GetGridPositionY() const
     return GridPositionY;
 }
 
+
+// In GridCell.cpp
+void AGridCell::SetUnit(AUnit* Unit)
+{
+    // Use existing bIsOccupied flag
+    bIsOccupied = (Unit != nullptr);
+    
+    // Log the change
+    UE_LOG(LogTemp, Warning, TEXT("Cell %s at (%d,%d) - Occupation set to: %s"), 
+        *CellName, GridPositionX, GridPositionY, 
+        bIsOccupied ? TEXT("Occupied") : TEXT("Empty"));
+}
+
 AUnit* AGridCell::GetUnit() const
 {
+    // Use the existing GetOverlappingActors method from your code
     TArray<AActor*> OverlappingActors;
     GetOverlappingActors(OverlappingActors, AUnit::StaticClass());
-    return (OverlappingActors.Num() > 0) ? Cast<AUnit>(OverlappingActors[0]) : nullptr;
+    
+    if (OverlappingActors.Num() > 0)
+    {
+        AUnit* FoundUnit = Cast<AUnit>(OverlappingActors[0]);
+        if (FoundUnit)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Cell %s at (%d,%d) - Found unit: %s"), 
+                *CellName, GridPositionX, GridPositionY, *FoundUnit->GetName());
+            return FoundUnit;
+        }
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Cell %s at (%d,%d) - No unit found"), 
+        *CellName, GridPositionX, GridPositionY);
+    return nullptr;
 }
 
 void AGridCell::SetHighlight(bool bHighlight)

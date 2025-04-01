@@ -470,27 +470,25 @@ void AMyGameMode::PrepareForPlayerActions()
 
 void AMyGameMode::HandleUnitSelection(AUnit* NewSelection)
 {
-    if (!NewSelection || !NewSelection->bIsPlayerUnit || !bIsPlayerTurn) return;
-
     if (SelectedUnit == NewSelection)
     {
-        // GridManager->ClearHighlights();
-        // SelectedUnit->SetSelected(false);
-        // SelectedUnit = nullptr;
-        // //GridManager->ClearHighlights();
-        bMovementRangeVisible = false;
-        HandleMoveAction();
-        HideActionWidget();
+        ClearSelection();
         return;
     }
 
-    // cambio unità
-    if (SelectedUnit) SelectedUnit->SetSelected(false);
+    ClearSelection();
     SelectedUnit = NewSelection;
     SelectedUnit->SetSelected(true);
 
-    GridManager->ClearHighlights(); // rimuovi vecchio highlight
-    bMovementRangeVisible = false;
+    if (GridManager)
+    {
+        // Highlight movement range
+        GridManager->HighlightMovementRange(SelectedUnit->GetGridPosition(), SelectedUnit->MovementRange, true);
+        
+        // Highlight attack range based on unit type
+        bool bIsRanged = (SelectedUnit->AttackRange > 1); // Sniper is ranged
+        GridManager->HighlightAttackRange(SelectedUnit->GetGridPosition(), SelectedUnit->AttackRange, true, bIsRanged);
+    }
 
     ShowActionWidget(SelectedUnit);
 }
@@ -696,11 +694,7 @@ void AMyGameMode::HandleMoveAction()
         UE_LOG(LogTemp, Warning, TEXT("HideActionWidget: Movement Range"));
         
         GridManager->ClearHighlights();
-        //GridManager->HighlightMovementRange(
-        //    SelectedUnit->GetGridPosition(),
-        //    SelectedUnit->MovementRange,
-        //    false
-        //);
+       
         bMovementRangeVisible = false;
         bWaitingForMoveTarget = false;
     }

@@ -54,6 +54,7 @@ public:
     void CreateGrid();
     void GenerateObstacles();
     void DestroyGrid();
+    bool IsCellBlocked(int32 X, int32 Y) const;
 
     UFUNCTION()
     void HandleCellClick(AGridCell* ClickedCell);
@@ -64,7 +65,7 @@ public:
     void HandlePlayerAction(AGridCell* ClickedCell);
     
     
-    bool IsPathClear(FVector2D Start, FVector2D End) const;
+   // bool IsPathClear(FVector2D Start, FVector2D End) const;
     void ClearHighlights();
     
     // Utility Functions
@@ -84,9 +85,9 @@ void CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap) const;
     bool AreAllCellsReachable(const TArray<TArray<bool>>& InObstacleMap) const;
     void BFS(const TArray<TArray<bool>>& InObstacleMap, TArray<TArray<bool>>& Visited, int32 StartX, int32 StartY) const;
 
-     TArray<FVector2D> AStarPathfind(FVector2D Start, FVector2D End, const TArray<TArray<bool>>& ObstacleMap) const;
-
-
+   
+    TArray<FVector2D> FindPath(FVector2D Start, FVector2D End , AUnit* MovingUnit);
+    TArray<FVector2D> AStarPathfind(FVector2D Start, FVector2D End, int32 MaxRange) const;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
     UMaterialInterface* DefaultTileMaterial;
@@ -100,14 +101,18 @@ void CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap) const;
     /*bool bIsMovementRangeVisible;
     bool bIsHighlightActive;
     AUnit* LastHighlightedUnit;*/
-    void LoadMaterials();
+    //void LoadMaterials();
     
     UPROPERTY()
     AUnit* CurrentlyHighlightedUnit = nullptr;
     void HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight);
-    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight);
+    // In GridManager.h
+    UFUNCTION(BlueprintCallable, Category = "Grid")
+    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack = false);
     UFUNCTION(BlueprintCallable, Category = "Grid")
     void HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAttackRange = false);
+    bool IsValidCell(FVector2D Pos) const;
+
 private:
     // Flag to track if the grid has been created
     bool bGridCreated;
