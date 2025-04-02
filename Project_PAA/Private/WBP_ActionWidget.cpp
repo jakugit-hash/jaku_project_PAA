@@ -1,5 +1,7 @@
 #include "WBP_ActionWidget.h"
 #include "MyGameMode.h"
+#include "Components/Border.h"
+#include "Components/ProgressBar.h"
 #include "Components/Button.h"
 
 void UWBP_ActionWidget::Setup(AMyGameMode* GameMode)
@@ -56,6 +58,18 @@ void UWBP_ActionWidget::UpdateButtons(bool bCanMove, bool bCanAttack)
 	}
 }
 
+void UWBP_ActionWidget::UpdateBordersVisibility(bool bIsPlayerTurn)
+{
+	if (HPBORDER)
+	{
+		HPBORDER->SetVisibility(bIsPlayerTurn ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+	if (AIBORDER)
+	{
+		AIBORDER->SetVisibility(bIsPlayerTurn ? ESlateVisibility::Hidden : ESlateVisibility::Visible);
+	}
+}
+
 void UWBP_ActionWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -64,6 +78,23 @@ void UWBP_ActionWidget::NativeConstruct()
 	if (!MoveButton) UE_LOG(LogTemp, Error, TEXT("Missing MoveButton!"));
 	if (!AttackButton) UE_LOG(LogTemp, Error, TEXT("Missing AttackButton!"));
 	if (!EndTurnButton) UE_LOG(LogTemp, Error, TEXT("Missing EndTurnButton!"));
+	
+	//esempi di utilizzo dei nuovi border (opzionale)
+	if (HPBORDER)
+	{
+		HPBORDER->SetVisibility(ESlateVisibility::Hidden); //oppure Hidden, come vuoi
+	}
+
+	if (AIBORDER)
+	{
+		AIBORDER->SetVisibility(ESlateVisibility::Hidden);
+	}
+	if (BRAWLERHEALTH)
+		BRAWLERHEALTH->SetPercent(1.0f);
+
+	if (SNIPERHEALTH)
+		SNIPERHEALTH->SetPercent(1.0f);
+
 }
 
 void UWBP_ActionWidget::SetVisibility(ESlateVisibility InVisibility)

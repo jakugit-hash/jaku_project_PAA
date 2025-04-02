@@ -68,7 +68,7 @@ void AUnit::SetGridPosition(FVector2D NewPosition)
 	}
 }
 
-void AUnit::MoveToCell(FVector2D NewPosition)
+/*void AUnit::MoveToCell(FVector2D NewPosition)
 {
 	AGridManager* GridManager = GetGridManager();
 	if (!GridManager) return;
@@ -85,7 +85,19 @@ void AUnit::MoveToCell(FVector2D NewPosition)
 		NewCell->SetOccupied(true);
 		SetActorLocation(GridManager->GetCellWorldPosition(NewPosition.X, NewPosition.Y));
 	}
+}*/
+
+void AUnit::MoveToCell(FVector2D NewGridPosition)
+{
+	AGridManager* Grid = Cast<AGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AGridManager::StaticClass()));
+	if (Grid)
+	{
+		SetActorLocation(Grid->GetWorldPositionFromGrid(NewGridPosition));
+	}
+
+	SetGridPosition(NewGridPosition); // aggiorna posizione logica
 }
+
 
 bool AUnit::CanAttack() const
 {

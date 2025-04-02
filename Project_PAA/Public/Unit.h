@@ -35,6 +35,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit")
 	int32 MaxDamage;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 HP = 100;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Unit")
 	UStaticMeshComponent* UnitMesh;
 
@@ -49,6 +52,7 @@ public:
 
 	UPROPERTY(VisibleAnywhere)
 	bool bIsSelected = false;
+
 
 	UFUNCTION(BlueprintCallable)
 	void SetSelected(bool bSelected);
@@ -71,9 +75,15 @@ public:
 	UFUNCTION()
 	void OnClicked(UPrimitiveComponent* ClickedComp, FKey ButtonPressed);
 
+	UFUNCTION(BlueprintCallable)
+   virtual bool IsSniper() const { return false; }
+	
 protected:
 	UFUNCTION(BlueprintCallable, Category = "Unit")
 	void ApplyTeamMaterials(bool bIsPlayer);
+
+
+	
 
 private:
 	FVector2D GridPosition;

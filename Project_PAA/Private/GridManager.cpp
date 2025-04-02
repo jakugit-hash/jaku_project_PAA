@@ -8,6 +8,7 @@
 #include "Containers/Array.h"
 #include "Containers/Set.h"
 #include "Templates/Greater.h"           // per TGreater<>
+#include "WBP_ActionWidget.h"
 #include "Kismet/GameplayStatics.h"
 
 // Constructor
@@ -15,7 +16,7 @@ AGridManager::AGridManager()
 {
     PrimaryActorTick.bCanEverTick = false;
     bGridCreated = false;
-    // materiale di default per la griglia
+    /*// materiale di default per la griglia
     static ConstructorHelpers::FObjectFinder<UMaterialInterface> DefaultMatFinder(
         TEXT("/Game/StarterContent/Materials/M_Water_Lake.M_Water_Lake"));
     DefaultTileMaterial = DefaultMatFinder.Object;
@@ -28,8 +29,10 @@ AGridManager::AGridManager()
     // materiale rosso per l'attacco
     static ConstructorHelpers::FObjectFinder<UMaterialInterface> AttackMatFinder(
         TEXT("/Game/StarterContent/Materials/M_Brick_Clay_New.M_Brick_Clay_New"));
-    HighlightAttackMaterial = AttackMatFinder.Object;
+    HighlightAttackMaterial = AttackMatFinder.Object;*/
     // Configurazione aggiuntiva per differenziare i materiali
+
+    
     if (HighlightMoveMaterial)
     {
         UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(HighlightMoveMaterial, this);
@@ -309,10 +312,10 @@ void AGridManager::HandleCellClick(AGridCell* ClickedCell)
 
 
     // Attack case
-    /*else if (GameMode->bWaitingForAttack && GameMode->SelectedUnit)
+    else if (GameMode->bWaitingForAttack && GameMode->SelectedUnit)
     {
         TryAttackSelectedUnit(ClickedCell);
-    }*/
+    }
 }
 
 
@@ -494,6 +497,65 @@ void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bH
     }
 }
 
+void AGridManager::TryAttackSelectedUnit(AGridCell* TargetCell)
+{
+    if (!GameMode || !GameMode->SelectedUnit || !TargetCell) return;
+
+    AUnit* Attacker = GameMode->SelectedUnit;
+    AUnit* Target = TargetCell->GetUnit();
+
+    if (!Target)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No unit to attack in the selected cell."));
+        return;
+    }
+
+    // Verifica se è nemico
+    if (Attacker->bIsPlayerUnit == Target->bIsPlayerUnit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot attack a friendly unit."));
+        return;
+    }
+
+    // Calcola distanza Manhattan
+    FVector2D AttackerPos = Attacker->GetGridPosition();
+    FVector2D TargetPos = Target->GetGridPosition();
+    int32 Distance = FMath::Abs(TargetPos.X - AttackerPos.X) + FMath::Abs(TargetPos.Y - AttackerPos.Y);
+
+    if (Distance > Attacker->AttackRange)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Target is out of range!"));
+        return;
+    }
+
+    // Attacco valido: calcola danno random
+    int32 Damage = FMath::RandRange(Attacker->MinDamage, Attacker->MaxDamage);
+    UE_LOG(LogTemp, Warning, TEXT("%s is attacking %s for %d damage"),
+        *Attacker->GetName(), *Target->GetName(), Damage);
+
+    Target->HP -= Damage;
+
+    if (Target->HP <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s has been destroyed!"), *Target->GetName());
+
+        // Rimuovi dalla cella
+        TargetCell->SetUnit(nullptr);
+        Target->DestroyUnit(); // già esistente nel tuo progetto
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s HP remaining: %d"), *Target->GetName(), Target->HP);
+    }
+
+    // Imposta flag per fine attacco
+    Attacker->bHasAttackedThisTurn = true;
+    GameMode->bWaitingForAttackTarget = false;
+    GameMode->SelectedUnit = nullptr;
+    GameMode->CheckTurnCompletion();
+    ClearHighlights();
+}
+
 
 /*void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight)
 {
@@ -563,15 +625,17 @@ void AGridManager::HighlightMovementRange(FVector2D Center, int32 Range, bool bH
 }*/
 
 
-void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack)
+void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack, AUnit* Attacker)
 {
     ClearHighlights();
-    
-    if (!bHighlight) 
+
+    if (!bHighlight || !Attacker) 
     {
         CurrentlyHighlightedUnit = nullptr;
         return;
     }
+
+    CurrentlyHighlightedUnit = Attacker;
 
     for (AGridCell* Cell : GridCells)
     {
@@ -580,26 +644,28 @@ void AGridManager::HighlightAttackRange(FVector2D Center, int32 Range, bool bHig
         FVector2D CellPos = Cell->GetGridPosition();
         int32 Distance = FMath::Abs(CellPos.X - Center.X) + FMath::Abs(CellPos.Y - Center.Y);
 
-        if (Distance <= Range)
+        if (Distance == 0 || Distance > Range) continue;
+
+        AUnit* Target = Cell->GetUnit();
+
+        // ignora celle vuote
+        if (!Target) continue;
+
+        // ignora alleati
+        if (Target->bIsPlayerUnit == Attacker->bIsPlayerUnit) continue;
+
+        // check distanza melee: serve path
+        if (!bIsRangedAttack)
         {
-            // For ranged attacks, ignore obstacles
-            if (bIsRangedAttack)
-            {
-                HighlightCell(CellPos.X, CellPos.Y, true, true);
-            }
-            // For melee attacks, check if path is clear
-            else 
-            {
-                TArray<FVector2D> Path = AStarPathfind(Center, CellPos, 1);
-                if (Path.Num() > 0)
-                {
-                    HighlightCell(CellPos.X, CellPos.Y, true, true);
-                }
-            }
+            TArray<FVector2D> Path = AStarPathfind(Center, CellPos, Range);
+            if (Path.Num() == 0 || Path.Last() != CellPos) continue; // path bloccato
         }
+
+        // evidenzia la cella con il nemico
+        HighlightCell(CellPos.X, CellPos.Y, true, true);
+        UE_LOG(LogTemp, Warning, TEXT("→ Highlight cell %s with enemy %s"), *Cell->GetCellName(), *Target->GetName());
     }
 }
-
 
 
 
@@ -741,31 +807,6 @@ TArray<FVector2D> AGridManager::AStarPathfind(FVector2D Start, FVector2D End, in
 }
 
 
-
-/*bool AGridManager::IsPathClear(FVector2D Start, FVector2D End) const
-{
-    // First check straight line path
-    bool bStraightClear = true;
-    int32 Steps = FMath::Max(FMath::Abs(End.X - Start.X), FMath::Abs(End.Y - Start.Y));
-    for (int32 i = 1; i < Steps && bStraightClear; i++)
-    {
-        FVector2D Point = FMath::Lerp(Start, End, float(i)/Steps);
-        if (IsCellBlocked(Point.X, Point.Y))
-        {
-            bStraightClear = false;
-        }
-    }
-    if (bStraightClear) return true;
-
-    // Fall back to A* if straight path is blocked
-    if (!GameMode || !GameMode->SelectedUnit) return false;
-
-    TArray<FVector2D> Path = AStarPathfind(Start, End, 
-        GameMode->SelectedUnit->MovementRange);
-
-    return Path.Num() > 0;
-}*/
-
 TArray<FVector2D> AGridManager::FindPath(FVector2D Start, FVector2D End,  AUnit* MovingUnit)
 {
     TArray<FVector2D> Path;
@@ -836,8 +877,8 @@ void AGridManager::HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAtta
 
     if (bHighlight)
     {
-       // UMaterialInterface* MaterialToUse = bIsAttackRange ? HighlightAttackMaterial : HighlightMoveMaterial;
-        //Cell->CellMesh->SetMaterial(0, MaterialToUse);
+        UMaterialInterface* MaterialToUse = bIsAttackRange ? HighlightAttackMaterial : HighlightMoveMaterial;
+        Cell->CellMesh->SetMaterial(0, MaterialToUse);
         Cell->SetHighlight(true);
     }
     else
@@ -910,21 +951,70 @@ bool AGridManager::IsCellBlocked(int32 X, int32 Y) const
     return false;
 }
 
-    /*if (Cell->IsObstacle())
+bool AGridManager::IsPathBlocked(AGridCell* Start, AGridCell* End)
+{
+    // solo distanza 1 quindi semplice controllo
+    if (!Start || !End) return true;
+    if (Start == End) return false;
+
+    FVector2D Dir = End->GetGridPosition() - Start->GetGridPosition();
+    if (FMath::Abs(Dir.X) + FMath::Abs(Dir.Y) != 1) return true; // solo vicini ortogonali
+
+    return End->IsObstacle() || End->IsOccupied();
+}
+
+
+bool AGridManager::IsCellAttackable(int32 X, int32 Y, AUnit* Attacker) const
+{
+    AGridCell* Cell = GetCellAtPosition(FVector2D(X, Y));
+    if (!Cell) return false;
+
+    if (Attacker->AttackRange == 1)  // short-range (e.g., Brawler)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Cell at (%d,%d) is obstacle - blocked"), X, Y);
+        // can't attack over obstacles or empty cells
+        if (Cell->IsObstacle()) return false;
+
+        AUnit* Target = Cell->GetUnit();
+        if (!Target || Target->bIsPlayerUnit == Attacker->bIsPlayerUnit)
+        {
+            return false; // no target or same team
+        }
         return true;
     }
-
-    if (Cell->IsOccupied())
+    else // long-range (e.g., Sniper)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Cell at (%d,%d) is occupied - blocked"), X, Y);
-        return true;
+        AUnit* Target = Cell->GetUnit();
+        if (!Target || Target->bIsPlayerUnit == Attacker->bIsPlayerUnit)
+        {
+            return false; // not an enemy
+        }
+        return true; // sniper ignores obstacles
     }
+}
 
-    UE_LOG(LogTemp, Log, TEXT("Cell at (%d,%d) is free"), X, Y);
-    return false;*/
-    
-    // Now uses the proper occupation check
-   // return Cell->IsObstacle() || Cell->GetUnit();
+bool AGridManager::IsEnemyAtPosition(FVector2D Pos, bool bIsPlayer)
+{
+    if (AGridCell* Cell = GetCellAtPosition(Pos))
+    {
+        if (AUnit* Unit = Cell->GetUnit())
+        {
+            return Unit->bIsPlayerUnit != bIsPlayer; // nemico se appartiene alla squadra opposta
+        }
+    }
+    return false;
+}
 
+
+FVector AGridManager::GetWorldPositionFromGrid(FVector2D GridPosition) const
+{
+    float X = GridPosition.X * CellSize;
+    float Y = GridPosition.Y * CellSize;
+    return FVector(X, Y, 0.0f); // oppure un altro valore Z se ne hai uno fisso
+}
+
+FString AGridManager::GetCellNameAtPosition(FVector2D Pos)
+{
+    TCHAR Letter = 'A' + Pos.X;
+    int32 Number = Pos.Y + 1;
+    return FString::Printf(TEXT("%c%d"), Letter, Number);
+}

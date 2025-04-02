@@ -122,6 +122,16 @@ public:
     bool bMovementRangeVisible = false;
     bool bIsAttackHighlighted = false;
     
+
+    UPROPERTY(BlueprintReadOnly)
+    TArray<FString> MoveLog;
+
+    UFUNCTION(BlueprintCallable)
+    const TArray<FString>& GetMoveLog() const { return MoveLog; }
+
+    UFUNCTION(BlueprintCallable)
+    void ClearMoveLog() { MoveLog.Empty(); }
+
     
     UFUNCTION()
     void HandleMoveAction();

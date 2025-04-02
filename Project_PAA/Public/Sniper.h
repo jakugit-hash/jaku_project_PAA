@@ -19,6 +19,8 @@ public:
 	UMaterialInterface* AIMaterial;
 
 	virtual void SetAsPlayerUnit(bool bIsPlayer) override;
+	virtual bool IsSniper() const override { return true; }
+
 
 protected:
 	virtual void BeginPlay() override;

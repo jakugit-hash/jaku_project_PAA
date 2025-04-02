@@ -411,6 +411,8 @@ bool AMyGameMode::PlaceUnit(const FString& UnitType, const FVector2D& CellPositi
     {
         NewUnit->SetGridPosition(CellPosition);
         NewUnit->SetAsPlayerUnit(bIsPlayerTurn);
+
+        Cell->SetUnit(NewUnit);
         UE_LOG(LogTemp, Warning, TEXT("%s placed at (%f, %f)"), *UnitType, CellPosition.X, CellPosition.Y);
         
         if (bIsPlayerTurn)
@@ -487,7 +489,15 @@ void AMyGameMode::HandleUnitSelection(AUnit* NewSelection)
         
         // Highlight attack range based on unit type
         bool bIsRanged = (SelectedUnit->AttackRange > 1); // Sniper is ranged
-        GridManager->HighlightAttackRange(SelectedUnit->GetGridPosition(), SelectedUnit->AttackRange, true, bIsRanged);
+        GridManager->HighlightAttackRange(
+    SelectedUnit->GetGridPosition(),
+    SelectedUnit->AttackRange,
+    true,
+    SelectedUnit->IsSniper(),
+    SelectedUnit
+);
+
+
     }
 
     ShowActionWidget(SelectedUnit);
@@ -497,21 +507,22 @@ void AMyGameMode::HandleUnitSelection(AUnit* NewSelection)
 
 void AMyGameMode::ClearSelection()
 {
-   
-
     bMovementRangeVisible = false;
     bIsAttackHighlighted = false;
+    bWaitingForAttackTarget = false;
+    bWaitingForMoveTarget = false;
 
     if (GridManager)
     {
         GridManager->ClearHighlights();
     }
-    
- if (SelectedUnit)
+
+    if (SelectedUnit)
     {
         SelectedUnit->SetSelected(false);
         SelectedUnit = nullptr;
     }
+
     HideActionWidget();
 }
 
@@ -565,7 +576,6 @@ void AMyGameMode::InitGameplayManagers()
     }
 }
 
-
 void AMyGameMode::StartActionPhase()
 {
     if (bActionPhaseStarted) return;
@@ -590,6 +600,9 @@ void AMyGameMode::StartActionPhase()
             ActionWidget->AddToViewport();
             ActionWidget->Setup(this); 
             UE_LOG(LogTemp, Warning, TEXT("ActionWidget creato e Setup eseguito"));
+
+            // MOSTRA IL BORDER CORRETTO IN BASE AL TURNO
+            ActionWidget->UpdateBordersVisibility(bIsPlayerTurn);
         }
     }
 
@@ -610,6 +623,7 @@ void AMyGameMode::StartActionPhase()
         }, 1.0f, false);
     }
 }
+
 
 
 
@@ -720,23 +734,40 @@ void AMyGameMode::HandleAttackAction()
 {
     if (!SelectedUnit || !GridManager) return;
 
-    // cancella eventuale highlight movimento
-    if (bMovementRangeVisible)
+    // se già attivo, disattiva evidenziazione e modalità attacco
+    if (bIsAttackHighlighted)
     {
         GridManager->ClearHighlights();
-        bMovementRangeVisible = false;
+        bIsAttackHighlighted = false;
+        bWaitingForAttackTarget = false;
+    }
+    else
+    {
+        // cancella eventuali highlight movimento
+        if (bMovementRangeVisible)
+        {
+            GridManager->ClearHighlights();
+            bMovementRangeVisible = false;
+            bWaitingForMoveTarget = false;
+        }
+
+        CurrentActionState = EUnitActionState::Attacking;
+        // attiva modalità attacco e highlight
+        GridManager->HighlightAttackRange(
+            SelectedUnit->GetGridPosition(),
+            SelectedUnit->AttackRange,
+            true,
+            SelectedUnit->IsSniper(),
+            SelectedUnit
+        );
+
+        //bIsAttackHighlighted = true;
+        bWaitingForAttackTarget = true;
     }
 
-    CurrentActionState = EUnitActionState::Attacking;
-
-    GridManager->HighlightAttackRange(
-        SelectedUnit->GetGridPosition(),
-        SelectedUnit->AttackRange,
-        true
-    );
-
-    HideActionWidget();
+    HideActionWidget(); // non elimina, solo nasconde temporaneamente
 }
+
 
 
 

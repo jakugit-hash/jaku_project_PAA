@@ -20,45 +20,40 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
-	
 
 public:
-	// Cell Name (e.g., "A1", "B5")
+	// nome cella (es. "A1")
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	FString CellName;
 
-	// Static Mesh for Visualization
+	// mesh visiva
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	UStaticMeshComponent* CellMesh;
 
-	// Is this cell an obstacle?
+	// è un ostacolo?
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	bool bIsObstacle = false;
 
-	// Is this cell occupied by a unit?
+	// è occupata?
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	bool bIsOccupied = false;
-	
-// Handle cell click
+
+	// posizione griglia
+	int32 GridPositionX;
+	int32 GridPositionY;
+
+	// click cella
 	UFUNCTION()
 	void OnCellClicked(UPrimitiveComponent* ClickedComponent, FKey ButtonPressed);
 
+	// highlight
 	UFUNCTION(BlueprintCallable)
 	void SetHighlight(bool bHighlight);
 
 	UFUNCTION(BlueprintCallable)
 	void SetHighlightColor(FLinearColor NewColor);
-	
-	/*{
-		TArray<AActor*> OverlappingActors;
-		GetOverlappingActors(OverlappingActors, AUnit::StaticClass());
-		return (OverlappingActors.Num() > 0) ? Cast<AUnit>(OverlappingActors[0]) : nullptr;
-	}*/
-	// Grid position of the cell
-	int32 GridPositionX;
-	int32 GridPositionY;
 
-	// Functions
+	// gestione cella
 	void SetObstacle(bool bObstacle);
 	bool IsObstacle() const;
 
@@ -70,17 +65,21 @@ public:
 
 	int32 GetGridPositionX() const;
 	int32 GetGridPositionY() const;
-
 	FVector2D GetGridPosition() const;
 
+	// gestione unità
 	UFUNCTION(BlueprintCallable)
 	void SetUnit(AUnit* Unit);
 
 	UFUNCTION(BlueprintCallable)
 	AUnit* GetUnit() const;
+	
+	UFUNCTION(BlueprintCallable)
+	FString GetCellName() const { return CellName; }
+
 
 private:
-	// Default and obstacle materials
+	// materiali
 	UPROPERTY(EditDefaultsOnly, Category = "Grid")
 	UMaterialInterface* DefaultMaterial;
 
@@ -89,9 +88,4 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Grid")
 	UMaterialInterface* HighlightMoveMaterial;
-
-	UPROPERTY()
-	AUnit* CurrentUnit = nullptr;
-
-	
 };

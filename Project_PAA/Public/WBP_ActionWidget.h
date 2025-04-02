@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/ProgressBar.h"
 #include "WBP_ActionWidget.generated.h"
 
 class AMyGameMode;
@@ -30,6 +31,15 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* EndTurnButton;
 
+	UFUNCTION(BlueprintCallable)
+	void UpdateBordersVisibility(bool bIsPlayerTurn);
+
+	UPROPERTY(meta = (BindWidget))
+	UProgressBar* BRAWLERHEALTH;
+
+	UPROPERTY(meta = (BindWidget))
+	UProgressBar* SNIPERHEALTH;
+
 private:
 	
 	UFUNCTION()
@@ -43,4 +53,12 @@ private:
 	
 	UPROPERTY()
 	AMyGameMode* GameModeRef;
+
+	UPROPERTY(meta = (BindWidget))
+	class UBorder* HPBORDER;
+
+	UPROPERTY(meta = (BindWidget))
+	class UBorder* AIBORDER;
+	
+	
 };

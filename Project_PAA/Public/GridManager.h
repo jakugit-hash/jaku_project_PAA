@@ -63,7 +63,10 @@ public:
     void TryMoveSelectedUnit(AGridCell* TargetCell);
     
     void HandlePlayerAction(AGridCell* ClickedCell);
-    
+
+    UFUNCTION(BlueprintCallable)
+    FString GetCellNameAtPosition(FVector2D Pos);
+
     
    // bool IsPathClear(FVector2D Start, FVector2D End) const;
     void ClearHighlights();
@@ -106,12 +109,20 @@ void CreateObstacleMap(TArray<TArray<bool>>& OutObstacleMap) const;
     UPROPERTY()
     AUnit* CurrentlyHighlightedUnit = nullptr;
     void HighlightMovementRange(FVector2D Center, int32 Range, bool bHighlight);
+    void TryAttackSelectedUnit(AGridCell* TargetCell);
     // In GridManager.h
     UFUNCTION(BlueprintCallable, Category = "Grid")
-    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack = false);
+    void HighlightAttackRange(FVector2D Center, int32 Range, bool bHighlight, bool bIsRangedAttack, AUnit* Attacker);
     UFUNCTION(BlueprintCallable, Category = "Grid")
     void HighlightCell(int32 X, int32 Y, bool bHighlight, bool bIsAttackRange = false);
     bool IsValidCell(FVector2D Pos) const;
+
+
+    FVector GetWorldPositionFromGrid(FVector2D GridPosition) const;
+
+    bool IsPathBlocked(class AGridCell* Start, class AGridCell* End);
+    bool IsCellAttackable(int32 X, int32 Y, AUnit* Attacker) const;
+    bool IsEnemyAtPosition(FVector2D Pos, bool bIsPlayer);
 
 private:
     // Flag to track if the grid has been created
